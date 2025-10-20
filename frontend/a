@@ -1,0 +1,239 @@
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import axios from 'axios';
+
+const VendorDashboard = () => {
+  const [products, setProducts] = useState([]);
+  const [form, setForm] = useState({
+    name: '', type: '', price: '', quantityPerCarton: '', manufacturer: '', description: ''
+  });
+  const [images, setImages] = useState([]);
+  const [videos, setVideos] = useState([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    axios.get(`${process.env.REACT_APP_API_URL}/api/products/my-products`, {  // ← التعديل: استخدام الـ endpoint الجديد
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        // تعديل الفلتر للتعامل مع vendor كـ ObjectId أو كائن
+        setProducts(res.data.filter(p => {
+          if (p.vendor) {
+            // لو vendor كائن (بعد populate)، نستخدم p.vendor._id
+            // لو vendor هو ObjectId (string)، نقارنه مباشرة
+            return typeof p.vendor === 'object' ? p.vendor._id === userId : p.vendor === userId;
+          }
+          return false; // لو vendor مش موجود، نستبعده
+        }));
+      })
+      .catch(err => console.error('خطأ في جلب المنتجات:', err));
+  }, []);
+
+  const handleAddProduct = () => {
+    const formData = new FormData();
+    Object.keys(form).forEach(key => formData.append(key, form[key]));
+    formData.append('vendor', localStorage.getItem('userId')); // إضافة vendor للتأكيد
+    images.forEach(image => formData.append('images', image));
+    videos.forEach(video => formData.append('videos', video));
+
+    const token = localStorage.getItem('token');
+    axios.post(`${process.env.REACT_APP_API_URL}/api/products`, formData, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+    })
+      .then(res => {
+        setProducts([...products, res.data]);
+        // إعادة تعيين النموذج بعد الإضافة
+        setForm({ name: '', type: '', price: '', quantityPerCarton: '', manufacturer: '', description: '' });
+        setImages([]);
+        setVideos([]);
+      })
+      .catch(err => alert('خطأ: ' + err.message));
+  };
+
+  const handleImageChange = (e) => setImages([...e.target.files]);
+  const handleVideoChange = (e) => setVideos([...e.target.files]);
+  const handleDelete = (id) => {
+    const token = localStorage.getItem('token');
+    axios.delete(`${process.env.REACT_APP_API_URL}/api/products/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(() => setProducts(products.filter(p => p._id !== id)))
+      .catch(err => alert('خطأ: ' + err.message));
+  };
+
+  const formVariants = {
+    hidden: { opacity: 0, y: 20, scale: 0.98 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.6,
+        ease: [0.4, 0, 0.2, 1],
+        type: 'spring',
+        stiffness: 100,
+        damping: 20,
+      },
+    },
+  };
+
+  const inputVariants = {
+    hover: {
+      scale: 1.02,
+      borderColor: 'rgba(59, 130, 246, 0.5)',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+    },
+    focus: {
+      scale: 1.02,
+      borderColor: 'rgba(59, 130, 246, 0.5)',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+    },
+  };
+
+  const buttonVariants = {
+    hover: {
+      scale: 1.05,
+      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
+      backgroundColor: 'rgba(34, 197, 94, 0.7)',
+      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+    },
+    tap: {
+      scale: 0.98,
+      transition: { duration: 0.1, ease: 'easeOut' },
+    },
+  };
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 20, scale: 0.98 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.6,
+        ease: [0.4, 0, 0.2, 1],
+        type: 'spring',
+        stiffness: 100,
+        damping: 20,
+      },
+    },
+    hover: {
+      scale: 1.03,
+      boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)',
+      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+    },
+  };
+
+  const deleteButtonVariants = {
+    hover: {
+      scale: 1.05,
+      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
+      backgroundColor: 'rgba(220, 38, 38, 0.7)',
+      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+    },
+    tap: {
+      scale: 0.98,
+      transition: { duration: 0.1, ease: 'easeOut' },
+    },
+  };
+
+  return (
+    <motion.div
+      className="min-h-screen flex flex-col items-center bg-gradient-to-b from-gray-900 to-gray-800 p-4 text-white"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      style={{ willChange: 'opacity' }}
+    >
+      <h1 className="text-2xl md:text-3xl font-bold mb-8 text-center">🏪 لوحة تحكم التاجر</h1>
+      <motion.div
+        className="bg-[#1F1F2E] p-6 rounded-2xl shadow-2xl mb-8 border border-gray-700 w-full max-w-4xl"
+        variants={formVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {['name', 'type', 'price', 'quantityPerCarton', 'manufacturer', 'description'].map(field => (
+            <motion.input
+              key={field}
+              type={field === 'price' || field === 'quantityPerCarton' ? 'number' : 'text'}
+              placeholder={field === 'name' ? 'اسم المنتج' : field === 'type' ? 'النوع' : field === 'price' ? 'السعر' : field === 'quantityPerCarton' ? 'الكرتونة (جوز)' : field === 'manufacturer' ? 'المصنع' : 'الوصف'}
+              value={form[field]}
+              onChange={e => setForm({ ...form, [field]: e.target.value })}
+              className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
+              variants={inputVariants}
+              whileHover="hover"
+              whileFocus="focus"
+            />
+          ))}
+          <motion.input
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleImageChange}
+            className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
+            variants={inputVariants}
+            whileHover="hover"
+            whileFocus="focus"
+          />
+          <motion.input
+            type="file"
+            multiple
+            accept="video/*"
+            onChange={handleVideoChange}
+            className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
+            variants={inputVariants}
+            whileHover="hover"
+            whileFocus="focus"
+          />
+        </div>
+        <motion.button
+          onClick={handleAddProduct}
+          className="mt-4 w-full p-3 rounded-xl text-white font-semibold"
+          style={{ backgroundColor: 'rgba(34, 197, 94, 0.5)' }}
+          variants={buttonVariants}
+          whileHover="hover"
+          whileTap="tap"
+        >
+          ➕ إضافة منتج
+        </motion.button>
+      </motion.div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl">
+        {products.map(product => (
+          <motion.div
+            key={product._id}
+            className="bg-[#1F1F2E] rounded-2xl shadow-2xl p-4 border border-gray-700"
+            variants={cardVariants}
+            initial="hidden"
+            animate="visible"
+            whileHover="hover"
+          >
+            <h2 className="text-xl font-semibold mb-2 text-right">{product.name}</h2>
+            <p className="text-gray-300 text-right">📋 الحالة: {product.approved ? '✅ موافق' : '⏳ انتظار'}</p>
+            <div className="flex mt-2 space-x-2 space-x-reverse justify-end">
+              {product.images?.slice(0,3).map((img, idx) => (
+                <img key={idx} src={`${process.env.REACT_APP_API_URL}/${img}`} className="w-16 h-16 object-cover rounded-xl" alt={`صورة ${idx + 1}`} />
+              ))}
+            </div>
+            <motion.button
+              onClick={() => handleDelete(product._id)}
+              className="mt-4 w-full p-2 rounded-xl text-white font-semibold"
+              style={{ backgroundColor: 'rgba(220, 38, 38, 0.5)' }}
+              variants={deleteButtonVariants}
+              whileHover="hover"
+              whileTap="tap"
+            >
+              🗑️ حذف
+            </motion.button>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+export default VendorDashboard;
+

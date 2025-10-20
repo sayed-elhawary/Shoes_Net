@@ -1,0 +1,334 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+const Orders = () => {
+  const [orders, setOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [userRole, setUserRole] = useState(null);
+  const [vendors, setVendors] = useState([]);
+  const [selectedVendor, setSelectedVendor] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      // جلب دور المستخدم
+      axios
+        .get(`${process.env.REACT_APP_API_URL}/api/user`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then(res => setUserRole(res.data.role))
+        .catch(err => console.error('Error fetching user role:', err));
+
+      // جلب الطلبات
+      axios
+        .get(`${process.env.REACT_APP_API_URL}/api/orders`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then(res => {
+          console.log('API Response for Orders:', res.data);
+          setOrders(res.data);
+          setFilteredOrders(res.data);
+        })
+        .catch(err => {
+          console.error('Error fetching orders:', err);
+          alert('خطأ في جلب الطلبات: ' + err.message);
+        });
+
+      // جلب قائمة التجار
+      axios
+        .get(`${process.env.REACT_APP_API_URL}/api/vendors`)
+        .then(res => setVendors(res.data))
+        .catch(err => console.error('Error fetching vendors:', err));
+    } else {
+      console.log('No token found, skipping fetch');
+    }
+  }, []);
+
+  // فلتر الطلبات بناءً على البحث، التاريخ، والتاجر
+  useEffect(() => {
+    let filtered = orders;
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      filtered = filtered.filter(order =>
+        (order.product?.vendor?.name && order.product.vendor.name.toLowerCase().includes(lowerQuery)) ||
+        (order.phone && order.phone.includes(lowerQuery)) ||
+        (order.product?.name && order.product.name.toLowerCase().includes(lowerQuery))
+      );
+    }
+    if (selectedVendor) {
+      filtered = filtered.filter(order => order.vendor === selectedVendor);
+    }
+    if (fromDate) {
+      filtered = filtered.filter(order => new Date(order.createdAt) >= new Date(fromDate));
+    }
+    if (toDate) {
+      filtered = filtered.filter(order => new Date(order.createdAt) <= new Date(toDate));
+    }
+    console.log('Filtered Orders:', filtered);
+    setFilteredOrders(filtered);
+  }, [searchQuery, selectedVendor, fromDate, toDate, orders]);
+
+  const handleDeleteOrder = (id) => {
+    if (window.confirm('هل تريد حذف هذا الطلب؟')) {
+      const token = localStorage.getItem('token');
+      axios
+        .delete(`${process.env.REACT_APP_API_URL}/api/orders/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then(() => {
+          setOrders(orders.filter(o => o._id !== id));
+          setFilteredOrders(filteredOrders.filter(o => o._id !== id));
+        })
+        .catch(err => alert('خطأ: ' + err.message));
+    }
+  };
+
+  // دالة تصدير PDF
+  const exportToPDF = () => {
+    try {
+      console.log('Starting PDF export with orders:', filteredOrders);
+      if (!filteredOrders || filteredOrders.length === 0) {
+        console.warn('No orders to export');
+        alert('لا توجد فواتير لتصديرها!');
+        return;
+      }
+
+      const tableBody = [
+        [
+          { text: 'اسم العميل', style: 'tableHeader' },
+          { text: 'رقم الهاتف', style: 'tableHeader' },
+          { text: 'العنوان', style: 'tableHeader' },
+          { text: 'المنتج', style: 'tableHeader' },
+          { text: 'اسم التاجر', style: 'tableHeader' },
+          { text: 'تاريخ الإنشاء', style: 'tableHeader' },
+        ],
+        ...filteredOrders.map((order, index) => {
+          console.log(`Processing order ${index}:`, order);
+          return [
+            order.customerName || 'زائر',
+            order.phone || '-',
+            order.address || '-',
+            order.product?.name || 'غير معروف',
+            order.product?.vendor?.name || 'غير معروف',
+            new Date(order.createdAt).toLocaleDateString('ar-EG')
+          ];
+        })
+      ];
+
+      const documentDefinition = {
+        content: [
+          { text: 'فواتير الشراء', style: 'header', alignment: 'center' },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['*', '*', '*', '*', '*', '*'],
+              body: tableBody
+            },
+            layout: 'lightHorizontalLines',
+            style: 'tableStyle'
+          }
+        ],
+        styles: {
+          header: {
+            fontSize: 18,
+            bold: true,
+            margin: [0, 0, 0, 10],
+            alignment: 'center'
+          },
+          tableHeader: {
+            bold: true,
+            fontSize: 12,
+            color: 'white',
+            fillColor: '#0066cc',
+            alignment: 'right'
+          },
+          tableStyle: {
+            margin: [0, 5, 0, 15],
+            alignment: 'right'
+          }
+        },
+        defaultStyle: {
+          alignment: 'right',
+          fontSize: 10
+        }
+      };
+
+      pdfMake.createPdf(documentDefinition).download('فواتير_الشراء.pdf');
+      console.log('PDF export completed successfully');
+    } catch (error) {
+      console.error('Error during PDF export:', error);
+      alert('حدث خطأ أثناء تصدير PDF: ' + error.message);
+    }
+  };
+
+  const tableVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: [0.4, 0, 0.2, 1],
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const rowVariants = {
+    hidden: { opacity: 0, x: 20 },
+    visible: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+    },
+  };
+
+  const buttonVariants = {
+    hover: {
+      scale: 1.1,
+      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
+    },
+    tap: {
+      scale: 0.9,
+      transition: { duration: 0.1, ease: 'easeOut' },
+    },
+  };
+
+  return (
+    <motion.div
+      className="min-h-screen flex flex-col items-center bg-gradient-to-b from-gray-900 to-gray-800 p-4 text-white"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      style={{ willChange: 'opacity' }}
+    >
+      <h1 className="text-2xl md:text-3xl font-bold mb-8 text-center">📋 قائمة فواتير الشراء</h1>
+      <div className="w-full max-w-6xl mb-6 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 md:space-x-reverse">
+        <input
+          type="text"
+          placeholder="ابحث عن اسم التاجر أو رقم الهاتف أو اسم المنتج..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        {userRole === 'admin' && (
+          <select
+            value={selectedVendor}
+            onChange={(e) => setSelectedVendor(e.target.value)}
+            className="p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500"
+          >
+            <option value="">كل التجار</option>
+            {vendors.map(vendor => (
+              <option key={vendor._id} value={vendor._id}>
+                {vendor.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <input
+          type="date"
+          placeholder="من تاريخ"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <input
+          type="date"
+          placeholder="إلى تاريخ"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <button
+          onClick={exportToPDF}
+          className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition duration-200"
+        >
+          تصدير إلى PDF
+        </button>
+      </div>
+      <AnimatePresence>
+        {filteredOrders.length === 0 ? (
+          <motion.p
+            className="text-center text-gray-400 text-xl py-8"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            لا توجد فواتير حالياً.
+          </motion.p>
+        ) : (
+          <motion.div
+            className="w-full max-w-6xl overflow-x-auto shadow-2xl rounded-2xl border border-gray-700"
+            variants={tableVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <table className="min-w-full bg-[#1F1F2E] border border-gray-700" id="orders-table">
+              <thead className="bg-blue-600/50 text-white">
+                <tr>
+                  <th className="py-3 px-4 text-right font-semibold">👤 اسم العميل</th>
+                  <th className="py-3 px-4 text-right font-semibold">📞 رقم الهاتف</th>
+                  <th className="py-3 px-4 text-right font-semibold">📍 العنوان</th>
+                  <th className="py-3 px-4 text-right font-semibold">📦 المنتج</th>
+                  <th className="py-3 px-4 text-right font-semibold">🏪 اسم التاجر</th>
+                  <th className="py-3 px-4 text-right font-semibold">📅 تاريخ الإنشاء</th>
+                  <th className="py-3 px-4 text-right font-semibold">⚙️ إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOrders.map(order => (
+                  <motion.tr
+                    key={order._id}
+                    className="hover:bg-gray-700/30 transition duration-200 border-b border-gray-700"
+                    variants={rowVariants}
+                  >
+                    <td className="py-3 px-4 font-medium text-right">
+                      {order.customerName || order.user?.name || 'زائر'}
+                    </td>
+                    <td className="py-3 px-4 text-right">{order.phone || '-'}</td>
+                    <td className="py-3 px-4 text-right">{order.address || '-'}</td>
+                    <td className="py-3 px-4 text-right">{order.product?.name || 'غير معروف'}</td>
+                    <td className="py-3 px-4 text-right">{order.product?.vendor?.name || 'غير معروف'}</td>
+                    <td className="py-3 px-4 text-right">{new Date(order.createdAt).toLocaleDateString('ar-EG')}</td>
+                    <td className="py-3 px-4 flex space-x-2 space-x-reverse justify-end">
+                      <motion.button
+                        className="text-blue-400 hover:text-blue-300 p-1"
+                        variants={buttonVariants}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        ✏️
+                      </motion.button>
+                      {userRole === 'admin' && (
+                        <motion.button
+                          onClick={() => handleDeleteOrder(order._id)}
+                          className="text-red-400 hover:text-red-300 p-1"
+                          variants={buttonVariants}
+                          whileHover="hover"
+                          whileTap="tap"
+                        >
+                          🗑️
+                        </motion.button>
+                      )}
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+export default Orders;

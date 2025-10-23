@@ -111,7 +111,7 @@ const VendorDashboard = () => {
   };
 
   const openMedia = (media, type) => {
-    setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/${media}`, type });
+    setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
   };
 
   const closeMedia = () => setSelectedMedia(null);
@@ -235,7 +235,7 @@ const VendorDashboard = () => {
               placeholder={
                 field === 'name' ? 'اسم المنتج' :
                 field === 'type' ? 'النوع' :
-                field === 'price' ? 'السعر' :
+                field === 'price' ? 'سعر الكرتونة' :
                 field === 'quantityPerCarton' ? 'الكرتونة (جوز)' :
                 field === 'manufacturer' ? 'المصنع' :
                 'الوصف'
@@ -293,46 +293,45 @@ const VendorDashboard = () => {
             <h2 className="text-xl font-semibold mb-2 text-right">{product.name}</h2>
             {product.images?.length > 0 ? (
               <img
-                src={`${process.env.REACT_APP_API_URL}/${product.images[0]}`}
+                src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[0]}`}
                 className="w-full h-48 object-cover rounded-xl mb-2"
                 alt={product.name}
                 onError={(e) => {
                   console.error('خطأ في تحميل الصورة الرئيسية:', e);
-                  e.target.src = `${process.env.REACT_APP_API_URL}/placeholder-image.jpg`;
+                  e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
                 }}
               />
             ) : (
               <img
-                src={`${process.env.REACT_APP_API_URL}/placeholder-image.jpg`}
+                src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`}
                 className="w-full h-48 object-cover rounded-xl mb-2"
                 alt="صورة بديلة"
                 onError={(e) => console.error('خطأ في تحميل الصورة البديلة:', e)}
               />
             )}
             <p className="text-gray-300 text-right">📋 الحالة: {product.approved ? '✅ موافق' : '⏳ انتظار'}</p>
-            <p className="text-gray-300 text-right">💰 السعر: {product.price}</p>
-            <p className="text-gray-300 text-right">📦 الكمية لكل كرتونة: {product.quantityPerCarton}</p>
-            <p className="text-gray-300 text-right">💼 سعر الكرتونة: {product.price * product.quantityPerCarton}</p>
+            <p className="text-gray-300 text-right">💰 سعر الكرتونة: {product.price} جنيه</p>
+            <p className="text-gray-300 text-right">💸 سعر الجوز: {(product.price / product.quantityPerCarton).toFixed(2)} جنيه</p>
+            <p className="text-gray-300 text-right">📦 الكمية لكل كرتونة: {product.quantityPerCarton} جوز</p>
             <p className="text-gray-300 text-right">🏭 المصنع: {product.manufacturer}</p>
             <p className="text-gray-300 text-right">📝 الوصف: {product.description}</p>
             <div className="flex flex-wrap mt-2 space-x-2 space-x-reverse justify-end">
               {product.images?.map((img, idx) => (
                 <img
                   key={idx}
-                  src={`${process.env.REACT_APP_API_URL}/${img}`}
+                  src={`${process.env.REACT_APP_API_URL}/uploads/${img}`}
                   className="w-16 h-16 object-cover rounded-xl cursor-pointer"
                   alt={`صورة ${idx + 1}`}
-                  onClick={() => openMedia(img, 'image')}
                   onError={(e) => {
                     console.error('خطأ في تحميل الصورة:', e);
-                    e.target.src = `${process.env.REACT_APP_API_URL}/placeholder-image.jpg`;
+                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
                   }}
                 />
               ))}
               {product.videos?.map((vid, idx) => (
                 <video
                   key={idx}
-                  src={`${process.env.REACT_APP_API_URL}/${vid}`}
+                  src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`}
                   className="w-16 h-16 object-cover rounded-xl cursor-pointer"
                   onClick={() => openMedia(vid, 'video')}
                   onError={(e) => console.error('خطأ في تحميل الفيديو:', e)}
@@ -384,11 +383,17 @@ const VendorDashboard = () => {
                   alt="صورة كاملة"
                   onError={(e) => {
                     console.error('خطأ في تحميل الصورة في المودال:', e);
-                    e.target.src = `${process.env.REACT_APP_API_URL}/placeholder-image.jpg`;
+                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
                   }}
                 />
               ) : (
-                <video src={selectedMedia.url} className="max-w-full max-h-screen rounded-xl" controls autoPlay />
+                <video
+                  src={selectedMedia.url}
+                  className="max-w-full max-h-screen rounded-xl"
+                  controls
+                  autoPlay
+                  onError={(e) => console.error('خطأ في تحميل الفيديو في المودال:', e)}
+                />
               )}
               <button className="absolute top-2 right-2 text-white text-2xl" onClick={closeMedia}>×</button>
             </motion.div>

@@ -48,19 +48,23 @@ const Vendors = () => {
             >
               {vendor.logo ? (
                 <img 
-                  src={`${process.env.REACT_APP_API_URL}/${vendor.logo}`} 
+                  src={`${process.env.REACT_APP_API_URL}/uploads/${vendor.logo}`} 
                   alt={`لوجو ${vendor.name}`} 
                   className="w-32 h-32 object-contain rounded-lg mb-4 mx-auto border border-gray-500 shadow-lg" 
                   style={{ boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)' }}
                   onError={(e) => {
                     console.error(`فشل تحميل صورة لـ ${vendor.name}: ${e.target.src}`);
-                    e.target.src = '/default-logo.png'; // صورة افتراضية
+                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; // صورة بديلة
                   }}
                 />
               ) : (
-                <div className="w-32 h-32 bg-gray-600 rounded-lg mb-4 mx-auto flex items-center justify-center shadow-lg">
-                  <span className="text-gray-400 text-sm">لا يوجد لوجو</span>
-                </div>
+                <img
+                  src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`}
+                  alt="لوجو بديل"
+                  className="w-32 h-32 object-contain rounded-lg mb-4 mx-auto border border-gray-500 shadow-lg"
+                  style={{ boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)' }}
+                  onError={(e) => console.error('خطأ في تحميل الصورة البديلة:', e)}
+                />
               )}
               <h3 className="text-lg font-semibold mb-2 text-right">{vendor.name}</h3>
               <p className="text-gray-300 mb-4 text-right">📝 الوصف: {vendor.description || 'لا يوجد وصف'}</p>

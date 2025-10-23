@@ -26,6 +26,8 @@ services:
       - JWT_SECRET=your_jwt_secret_key
     depends_on:
       - mongo
+    volumes:
+      - ./backend/Uploads:/app/Uploads  # ربط مجلد محلي بمجلد داخل الحاوية
     networks:
       - app-network
 

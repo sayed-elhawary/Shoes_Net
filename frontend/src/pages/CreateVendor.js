@@ -23,7 +23,7 @@ function CreateVendor() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => {
-        console.log('Vendors data:', res.data); // للتحقق من بيانات التجار ومسار logo
+        console.log('Vendors data:', res.data);
         setVendors(res.data);
       })
       .catch(err => alert('خطأ في جلب التجار: ' + (err.response?.data?.message || err.message)));
@@ -41,10 +41,9 @@ function CreateVendor() {
     formData.append('email', form.email);
     formData.append('password', form.password);
     formData.append('description', form.description);
-    if (form.logo) formData.append('logo', form.logo); // إضافة الصورة إذا موجودة
+    if (form.logo) formData.append('logo', form.logo);
 
     if (isEditing) {
-      // تعديل تاجر موجود
       axios.put(`${process.env.REACT_APP_API_URL}/api/vendors/${editingId}`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -58,7 +57,6 @@ function CreateVendor() {
         })
         .catch(err => alert('خطأ في التعديل: ' + (err.response?.data?.message || err.message)));
     } else {
-      // إنشاء تاجر جديد
       axios.post(`${process.env.REACT_APP_API_URL}/api/vendors`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -78,9 +76,9 @@ function CreateVendor() {
     setForm({
       name: vendor.name,
       email: vendor.email,
-      password: '', // لا نعرض كلمة المرور القديمة
+      password: '',
       description: vendor.description || '',
-      logo: null // لا نعرض الصورة القديمة، بس يقدر يرفع جديدة
+      logo: null
     });
     setIsEditing(true);
     setEditingId(vendor._id);
@@ -217,12 +215,12 @@ function CreateVendor() {
             >
               {vendor.logo ? (
                 <img 
-                  src={`${process.env.REACT_APP_API_URL}/${vendor.logo}`} 
+                  src={`${process.env.REACT_APP_API_URL}/uploads/${vendor.logo}`} 
                   alt={`لوجو ${vendor.name}`} 
                   className="w-24 h-24 object-contain rounded-lg mb-4 mx-auto border border-gray-500" 
                   onError={(e) => {
                     console.error(`فشل تحميل صورة لـ ${vendor.name}: ${e.target.src}`);
-                    e.target.src = '/default-logo.png'; // صورة افتراضية
+                    e.target.src = '/default-logo.png';
                   }}
                 />
               ) : (

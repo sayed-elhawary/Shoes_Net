@@ -2,16 +2,14 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const auth = require('../middleware/auth');
-const isAdmin = require('../middleware/isAdmin');
-const isVendor = require('../middleware/isVendor');
 const Product = require('../models/Product');
 
-console.log('Orders route loaded'); // تأكيد تحميل الملف
+console.log('Orders route loaded');
 
 // عرض الطلبات (مصفاة بناءً على الدور، مع دعم فلاتر جديدة)
 router.get('/', auth, async (req, res) => {
   try {
-    console.log(`Fetching orders for user: ${req.user.id}, role: ${req.user.role}`); // تسجيل معلومات المستخدم
+    console.log(`Fetching orders for user: ${req.user.id}, role: ${req.user.role}`);
     const { vendorName, startDate, endDate, phone } = req.query;
     let query = {};
 
@@ -29,7 +27,6 @@ router.get('/', auth, async (req, res) => {
 
     let orders;
     if (req.user.role === 'admin') {
-      // للأدمن: فلتر باسم التاجر إذا موجود
       if (vendorName) {
         const vendors = await Product.aggregate([
           { $lookup: { from: 'vendors', localField: 'vendor', foreignField: '_id', as: 'vendorInfo' } },
@@ -44,10 +41,10 @@ router.get('/', auth, async (req, res) => {
         populate: { path: 'vendor', select: 'name' }
       });
     } else if (req.user.role === 'vendor') {
-      console.log(`Fetching products for vendor: ${req.user.id}`); // تسجيل جلب المنتجات
+      console.log(`Fetching products for vendor: ${req.user.id}`);
       const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id');
       const productIds = vendorProducts.map(p => p._id);
-      console.log(`Vendor product IDs: ${productIds}`); // تسجيل معرفات المنتجات
+      console.log(`Vendor product IDs: ${productIds}`);
       query.product = { $in: productIds };
       orders = await Order.find(query).populate({
         path: 'product',
@@ -62,21 +59,21 @@ router.get('/', auth, async (req, res) => {
         populate: { path: 'vendor', select: 'name' }
       });
     }
-    console.log(`Fetched orders: ${orders.length}`, orders); // تسجيل عدد وتفاصيل الطلبات
+    console.log(`Fetched orders: ${orders.length}`, orders);
     res.json(orders);
   } catch (err) {
     console.error('Detailed error in GET /api/orders:', {
       message: err.message,
       stack: err.stack,
       user: req.user
-    }); // تسجيل تفاصيل الخطأ
+    });
     res.status(500).json({ message: 'خطأ داخلي في السيرفر: ' + err.message });
   }
 });
 
 // إضافة طلب جديد (مفتوح للجميع، بدون auth)
 router.post('/', async (req, res) => {
-  const { product, vendor, quantity, customerName, phone, address } = req.body;
+  const { product, vendor, quantity, customerName, phone, address, selectedImage } = req.body;
   try {
     console.log('POST /api/orders received:', req.body);
     const productDoc = await Product.findById(product);
@@ -97,10 +94,11 @@ router.post('/', async (req, res) => {
       customerName: customerName || '',
       phone: phone || '',
       address: address || '',
-      status: 'pending'
+      status: 'pending',
+      selectedImage: selectedImage || 'placeholder-image.jpg' // تخزين الصورة المختارة
     });
     await order.save();
-    console.log('Saved order:', order); // تسجيل الطلب بعد الحفظ
+    console.log('Saved order:', order);
     res.status(201).json({ message: 'تم إنشاء الطلب بنجاح', order });
   } catch (err) {
     console.error('Error in POST /api/orders:', {

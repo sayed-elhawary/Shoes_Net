@@ -2,7 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const path = require('path'); // path العادي
+const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 const app = express();
@@ -10,11 +11,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// serving الملفات الثابتة من مجلد uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// التحقق من وجود مجلد Uploads وإنشاؤه إذا لم يكن موجودًا
+const uploadsDir = path.join(__dirname, 'Uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(UploadsDir, { recursive: true });
+  console.log('Created Uploads directory');
+}
 
-// serving الملفات الثابتة من مجلد public للصور البديلة والثابتة الأخرى
-app.use(express.static(path.join(__dirname, 'public')));
+// التحقق من وجود مجلد public وإنشاؤه إذا لم يكن موجودًا
+const publicDir = path.join(__dirname, 'public');
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+  console.log('Created public directory');
+}
+
+// منع الكاش للصور
+app.use('/uploads', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, express.static(uploadsDir));
+
+// serving الملفات الثابتة من public
+app.use(express.static(publicDir));
 
 // الاتصال بـ MongoDB
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })

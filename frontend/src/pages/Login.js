@@ -1,3 +1,4 @@
+// frontend/src/pages/Login.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,7 +21,7 @@ const CustomLoadingSpinner = () => (
 );
 
 const Login = () => {
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ emailOrPhone: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -32,19 +33,33 @@ const Login = () => {
     setError('');
     setSuccessMessage('');
     setLoading(true);
+
     try {
-      const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, form);
+      const payload = {};
+      if (/^\d{11}$/.test(form.emailOrPhone)) {
+        payload.phone = form.emailOrPhone;
+      } else {
+        payload.email = form.emailOrPhone;
+      }
+      payload.password = form.password;
+
+      const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, payload);
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('role', res.data.role);
       localStorage.setItem('userId', res.data.userId);
+      // Dispatch authChange event to notify App.js
+      window.dispatchEvent(new Event('authChange'));
+      console.log('authChange event dispatched'); // Debug log
       setSuccessMessage('تم تسجيل الدخول بنجاح');
       setShowSuccessAnimation(true);
       setTimeout(() => {
         setShowSuccessAnimation(false);
         if (res.data.role === 'admin') {
           navigate('/admin');
-        } else {
+        } else if (res.data.role === 'vendor') {
           navigate('/vendor');
+        } else {
+          navigate('/'); // العملاء يوجهون إلى Home
         }
       }, 1500);
     } catch (err) {
@@ -113,7 +128,6 @@ const Login = () => {
         animate="visible"
       >
         <h1 className="text-2xl font-bold text-center text-white mb-6">🔐 تسجيل الدخول</h1>
-
         <AnimatePresence>
           {error && (
             <motion.div
@@ -138,7 +152,6 @@ const Login = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         <motion.form
           onSubmit={handleSubmit}
           variants={formVariants}
@@ -146,15 +159,15 @@ const Login = () => {
           animate="visible"
         >
           <div className="mb-4">
-            <label className="block text-white text-sm mb-2 text-right">البريد الإلكتروني</label>
+            <label className="block text-white text-sm mb-2 text-right">البريد الإلكتروني أو رقم الهاتف</label>
             <motion.input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              type="text"
+              value={form.emailOrPhone}
+              onChange={(e) => setForm({ ...form, emailOrPhone: e.target.value })}
               className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
               required
               disabled={loading}
-              placeholder="أدخل البريد الإلكتروني"
+              placeholder="أدخل البريد الإلكتروني أو رقم الهاتف"
               variants={inputVariants}
               whileHover="hover"
               whileFocus="focus"
@@ -187,13 +200,13 @@ const Login = () => {
             {loading ? <CustomLoadingSpinner /> : 'تسجيل الدخول'}
           </motion.button>
         </motion.form>
-
         <p className="text-center mt-4 text-sm text-gray-400">
           للأدمن: admin@test.com / 123456
           <br />
           للتاجر: أنشئ من لوحة الأدمن
+          <br />
+          للعملاء: اطلب حسابًا من الأدمن
         </p>
-
         <AnimatePresence>
           {showSuccessAnimation && (
             <motion.div

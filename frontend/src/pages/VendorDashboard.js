@@ -36,11 +36,16 @@ const VendorDashboard = () => {
   }, []);
 
   const handleAddOrUpdateProduct = () => {
+    // Validate required fields
     if (!form.name || !form.type || !form.price || !form.quantityPerCarton || !form.manufacturer) {
       alert('يرجى ملء جميع الحقول المطلوبة');
       return;
     }
-
+    // Validate that at least one image is uploaded if videos are present
+    if (videos.length > 0 && images.length === 0) {
+      alert('يجب رفع صورة واحدة على الأقل عند رفع فيديو');
+      return;
+    }
     const formData = new FormData();
     Object.keys(form).forEach(key => formData.append(key, form[key]));
     if (!isEditing) {
@@ -48,13 +53,11 @@ const VendorDashboard = () => {
     }
     images.forEach(image => formData.append('images', image));
     videos.forEach(video => formData.append('videos', video));
-
     const token = localStorage.getItem('token');
-    const url = isEditing 
+    const url = isEditing
       ? `${process.env.REACT_APP_API_URL}/api/products/${editingProductId}`
       : `${process.env.REACT_APP_API_URL}/api/products`;
     const method = isEditing ? 'put' : 'post';
-
     axios[method](url, formData, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
     })
@@ -68,7 +71,10 @@ const VendorDashboard = () => {
         }
         resetForm();
       })
-      .catch(err => alert(`خطأ في ${isEditing ? 'تعديل' : 'إضافة'} المنتج: ` + err.message));
+      .catch(err => {
+        const errorMessage = err.response?.data?.message || `خطأ في ${isEditing ? 'تعديل' : 'إضافة'} المنتج: ${err.message}`;
+        alert(errorMessage);
+      });
   };
 
   const resetForm = () => {
@@ -94,8 +100,32 @@ const VendorDashboard = () => {
     setEditingProductId(product._id);
   };
 
-  const handleImageChange = (e) => setImages([...e.target.files]);
-  const handleVideoChange = (e) => setVideos([...e.target.files]);
+  const handleImageChange = (e) => {
+    const files = [...e.target.files];
+    const maxSize = 50 * 1024 * 1024; // 50 ميجابايت
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        alert(`الملف ${file.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`);
+        return false;
+      }
+      return true;
+    });
+    setImages(validFiles);
+  };
+
+  const handleVideoChange = (e) => {
+    const files = [...e.target.files];
+    const maxSize = 50 * 1024 * 1024; // 50 ميجابايت
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        alert(`الملف ${file.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`);
+        return false;
+      }
+      return true;
+    });
+    setVideos(validFiles);
+  };
+
   const handleDelete = (id) => {
     if (window.confirm('هل تريد حذف هذا المنتج؟')) {
       const token = localStorage.getItem('token');
@@ -228,13 +258,12 @@ const VendorDashboard = () => {
         animate="visible"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {['name', 'type', 'price', 'quantityPerCarton', 'manufacturer', 'description'].map(field => (
+          {['name', 'price', 'quantityPerCarton', 'manufacturer', 'description'].map(field => (
             <motion.input
               key={field}
               type={field === 'price' || field === 'quantityPerCarton' ? 'number' : 'text'}
               placeholder={
                 field === 'name' ? 'اسم المنتج' :
-                field === 'type' ? 'النوع' :
                 field === 'price' ? 'سعر الكرتونة' :
                 field === 'quantityPerCarton' ? 'الكرتونة (جوز)' :
                 field === 'manufacturer' ? 'المصنع' :
@@ -248,6 +277,19 @@ const VendorDashboard = () => {
               whileFocus="focus"
             />
           ))}
+          <motion.select
+            value={form.type}
+            onChange={e => setForm({ ...form, type: e.target.value })}
+            className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right"
+            variants={inputVariants}
+            whileHover="hover"
+            whileFocus="focus"
+          >
+            <option value="" disabled>اختر النوع</option>
+            <option value="رجالي">رجالي</option>
+            <option value="حريمي">حريمي</option>
+            <option value="أطفال">أطفال</option>
+          </motion.select>
           <motion.input
             type="file"
             multiple
@@ -315,6 +357,7 @@ const VendorDashboard = () => {
             <p className="text-gray-300 text-right">📦 الكمية لكل كرتونة: {product.quantityPerCarton} جوز</p>
             <p className="text-gray-300 text-right">🏭 المصنع: {product.manufacturer}</p>
             <p className="text-gray-300 text-right">📝 الوصف: {product.description}</p>
+            <p className="text-gray-300 text-right">📦 النوع: {product.type}</p>
             <div className="flex flex-wrap mt-2 space-x-2 space-x-reverse justify-end">
               {product.images?.map((img, idx) => (
                 <img
@@ -322,6 +365,7 @@ const VendorDashboard = () => {
                   src={`${process.env.REACT_APP_API_URL}/uploads/${img}`}
                   className="w-16 h-16 object-cover rounded-xl cursor-pointer"
                   alt={`صورة ${idx + 1}`}
+                  onClick={() => openMedia(img, 'image')}
                   onError={(e) => {
                     console.error('خطأ في تحميل الصورة:', e);
                     e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
@@ -363,8 +407,6 @@ const VendorDashboard = () => {
           </motion.div>
         ))}
       </div>
-
-      {/* Modal لفتح الصورة/الفيديو */}
       <AnimatePresence>
         {selectedMedia && (
           <motion.div
@@ -395,7 +437,14 @@ const VendorDashboard = () => {
                   onError={(e) => console.error('خطأ في تحميل الفيديو في المودال:', e)}
                 />
               )}
-              <button className="absolute top-2 right-2 text-white text-2xl" onClick={closeMedia}>×</button>
+              <motion.button
+                onClick={closeMedia}
+                className="absolute top-2 right-2 text-red-500 text-2xl bg-gray-900/70 rounded-full p-2 hover:text-red-400 hover:bg-gray-900/90"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                ×
+              </motion.button>
             </motion.div>
           </motion.div>
         )}

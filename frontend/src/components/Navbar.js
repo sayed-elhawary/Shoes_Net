@@ -1,3 +1,4 @@
+// frontend/src/components/Navbar.js
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -7,7 +8,6 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
-  // تحديث حالة المستخدم عند التحميل الأولي أو تغيير localStorage
   useEffect(() => {
     const updateUser = () => {
       const token = localStorage.getItem('token');
@@ -18,18 +18,13 @@ const Navbar = () => {
         setUser(null);
       }
     };
-
-    // التحقق الأولي عند التحميل
     updateUser();
-
-    // مراقبة تغييرات localStorage (على سبيل المثال، عند تسجيل الدخول في علامة تبويب أخرى)
     window.addEventListener('storage', updateUser);
-
-    // تحديث يدوي كل ثانية للتأكد من تحديث فوري بعد تسجيل الدخول
+    window.addEventListener('authChange', updateUser); // Listen for authChange
     const interval = setInterval(updateUser, 1000);
-
     return () => {
       window.removeEventListener('storage', updateUser);
+      window.removeEventListener('authChange', updateUser);
       clearInterval(interval);
     };
   }, []);
@@ -39,7 +34,9 @@ const Navbar = () => {
     localStorage.removeItem('role');
     localStorage.removeItem('userId');
     setUser(null);
-    setIsMobileMenuOpen(false); // إغلاق قائمة الهاتف عند تسجيل الخروج
+    setIsMobileMenuOpen(false);
+    // Dispatch authChange event to update App.js
+    window.dispatchEvent(new Event('authChange'));
     window.location.href = '/';
   };
 
@@ -71,8 +68,6 @@ const Navbar = () => {
         <Link to="/" className="text-2xl font-bold flex items-center">
           🛒 التجارة الإلكترونية
         </Link>
-
-        {/* Mobile Menu Toggle */}
         <button
           className="md:hidden p-2 rounded-lg focus:outline-none"
           onClick={toggleMobileMenu}
@@ -81,8 +76,6 @@ const Navbar = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isMobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
           </svg>
         </button>
-
-        {/* Desktop Menu */}
         <div className="hidden md:flex space-x-6 space-x-reverse items-center">
           <Link
             to="/"
@@ -100,7 +93,7 @@ const Navbar = () => {
           >
             👥 التجار
           </Link>
-          {(user?.role === 'admin' || user?.role === 'vendor') && (
+          {user && (
             <Link
               to="/orders"
               className={`px-4 py-2 rounded-xl transition duration-200 ${
@@ -138,6 +131,14 @@ const Navbar = () => {
               >
                 ➕ إضافة تاجر
               </Link>
+              <Link
+                to="/create-customer"
+                className={`px-4 py-2 rounded-xl transition duration-200 ${
+                  location.pathname === '/create-customer' ? 'bg-green-600/50' : 'hover:bg-green-600/30'
+                }`}
+              >
+                👤 إضافة عميل
+              </Link>
             </>
           )}
           {user ? (
@@ -162,8 +163,6 @@ const Navbar = () => {
           )}
         </div>
       </div>
-
-      {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <motion.div
           className="md:hidden mt-4 flex flex-col space-y-4"
@@ -190,7 +189,7 @@ const Navbar = () => {
           >
             👥 التجار
           </Link>
-          {(user?.role === 'admin' || user?.role === 'vendor') && (
+          {user && (
             <Link
               to="/orders"
               className={`px-4 py-2 rounded-xl transition duration-200 text-right ${
@@ -231,6 +230,15 @@ const Navbar = () => {
                 onClick={toggleMobileMenu}
               >
                 ➕ إضافة تاجر
+              </Link>
+              <Link
+                to="/create-customer"
+                className={`px-4 py-2 rounded-xl transition duration-200 text-right ${
+                  location.pathname === '/create-customer' ? 'bg-green-600/50' : 'hover:bg-green-600/30'
+                }`}
+                onClick={toggleMobileMenu}
+              >
+                👤 إضافة عميل
               </Link>
             </>
           )}

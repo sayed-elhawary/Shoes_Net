@@ -1,69 +1,132 @@
+// frontend/src/pages/Home.js
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const Home = () => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [filterType, setFilterType] = useState('');
   const [cart, setCart] = useState([]);
   const [showCartModal, setShowCartModal] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [orderForm, setOrderForm] = useState({
-    customerName: '',
-    phone: '',
     address: ''
   });
   const [selectedMedia, setSelectedMedia] = useState(null);
-  const [currentImageIndex, setCurrentImageIndex] = useState({});
+  const [currentMediaIndex, setCurrentMediaIndex] = useState({});
+  const [currentMediaType, setCurrentMediaType] = useState({});
   const [showAddedToCart, setShowAddedToCart] = useState(null);
+  const [error, setError] = useState('');
   const intervalRefs = useRef({});
+  const navigate = useNavigate();
 
+  // فحص التوكن ودور المستخدم عند تحميل الصفحة
   useEffect(() => {
-    // Load products
-    axios.get(`${process.env.REACT_APP_API_URL}/api/products`)
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    
+    // التحقق من وجود توكن صالح ودور مناسب (admin, vendor, customer)
+    if (!token || !['admin', 'vendor', 'customer'].includes(role)) {
+      setError('غير مصرح: يرجى تسجيل الدخول كأدمن، تاجر، أو عميل');
+      navigate('/login');
+      return;
+    }
+
+    // جلب المنتجات
+    axios
+      .get(`${process.env.REACT_APP_API_URL}/api/products`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       .then(res => {
         setProducts(res.data);
+        setFilteredProducts(res.data);
         const initialIndexes = res.data.reduce((acc, product) => ({
           ...acc,
           [product._id]: 0
         }), {});
-        setCurrentImageIndex(initialIndexes);
+        const initialTypes = res.data.reduce((acc, product) => ({
+          ...acc,
+          [product._id]: product.videos && product.videos.length > 0 ? 'video' : 'image'
+        }), {});
+        setCurrentMediaIndex(initialIndexes);
+        setCurrentMediaType(initialTypes);
+        setError('');
       })
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error('خطأ في جلب المنتجات:', err);
+        setError(err.response?.data?.message || 'خطأ في جلب المنتجات');
+        if (err.response?.status === 401) {
+          setError('غير مصرح: يرجى تسجيل الدخول مرة أخرى');
+          localStorage.removeItem('token');
+          localStorage.removeItem('role');
+          localStorage.removeItem('userId');
+          navigate('/login');
+        }
+      });
 
-    // Load cart from localStorage
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      setCart(JSON.parse(savedCart));
+    // جلب السلة من localStorage (فقط للعملاء)
+    if (role === 'customer') {
+      const savedCart = localStorage.getItem('cart');
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
+      }
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    // Set up intervals for image rotation
+    // تصفية المنتجات بناءً على filterType
+    if (filterType === '') {
+      setFilteredProducts(products);
+    } else {
+      setFilteredProducts(products.filter(product => product.type === filterType));
+    }
+  }, [filterType, products]);
+
+  useEffect(() => {
+    // إعداد التدوير التلقائي للصور
     products.forEach(product => {
-      if (product.images && product.images.length > 1) {
+      const totalImages = product.images?.length || 0;
+      if (totalImages > 1 && (!product.videos || product.videos.length === 0)) {
         clearInterval(intervalRefs.current[product._id]);
         intervalRefs.current[product._id] = setInterval(() => {
-          setCurrentImageIndex(prev => ({
-            ...prev,
-            [product._id]: (prev[product._id] + 1) % product.images.length
+          setCurrentMediaIndex(prev => {
+            const currentIndex = prev[product._id] || 0;
+            const nextIndex = (currentIndex + 1) % totalImages;
+            return {
+              ...prev,
+              [product._id]: nextIndex
+            };
+          });
+          setCurrentMediaType(prevType => ({
+            ...prevType,
+            [product._id]: 'image'
           }));
         }, 3000);
       }
     });
-
     return () => {
       Object.values(intervalRefs.current).forEach(clearInterval);
     };
   }, [products]);
 
   useEffect(() => {
-    // Save cart to localStorage
-    localStorage.setItem('cart', JSON.stringify(cart));
+    // حفظ السلة في localStorage (فقط للعملاء)
+    const role = localStorage.getItem('role');
+    if (role === 'customer') {
+      localStorage.setItem('cart', JSON.stringify(cart));
+    }
   }, [cart]);
 
   const addToCart = (product) => {
-    const selectedImage = product.images[currentImageIndex[product._id] || 0] || 'placeholder-image.jpg';
+    const currentIndex = currentMediaIndex[product._id] || 0;
+    const currentType = currentMediaType[product._id] || 'image';
+    if (currentType === 'video') {
+      alert('يرجى اختيار صورة لإضافتها إلى السلة');
+      return;
+    }
+    const selectedImage = product.images[currentIndex - (product.videos?.length || 0)] || 'placeholder-image.jpg';
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.product._id === product._id && item.selectedImage === selectedImage);
       if (existingItem) {
@@ -95,36 +158,57 @@ const Home = () => {
   };
 
   const handleOrderSubmit = () => {
-    if (!orderForm.customerName || !orderForm.phone || !orderForm.address) {
-      alert('يرجى ملء جميع الحقول');
+    if (!orderForm.address) {
+      alert('يرجى إدخال العنوان');
       return;
     }
-
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    if (!token || !userId) {
+      setError('غير مصرح: يرجى تسجيل الدخول مرة أخرى');
+      navigate('/login');
+      return;
+    }
     const promises = cart.map(item =>
-      axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
-        product: item.product._id,
-        vendor: item.product.vendor._id || item.product.vendor,
-        quantity: item.quantity,
-        customerName: orderForm.customerName,
-        phone: orderForm.phone,
-        address: orderForm.address,
-        selectedImage: item.selectedImage // إضافة الصورة المختارة إلى الطلب
-      })
+      axios.post(
+        `${process.env.REACT_APP_API_URL}/api/orders`,
+        {
+          product: item.product._id,
+          vendor: item.product.vendor._id || item.product.vendor,
+          quantity: item.quantity,
+          user: userId,
+          address: orderForm.address,
+          selectedImage: item.selectedImage
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      )
     );
-
     Promise.all(promises)
       .then(() => {
         alert('تم إنشاء الطلبات بنجاح!');
         setCart([]);
         setShowOrderForm(false);
-        setOrderForm({ customerName: '', phone: '', address: '' });
+        setOrderForm({ address: '' });
+        setError('');
       })
-      .catch(err => alert('خطأ: ' + err.message));
+      .catch(err => {
+        const errorMessage = err.response?.data?.message || 'خطأ في تقديم الطلب';
+        setError(errorMessage);
+        if (err.response?.status === 401) {
+          setError('غير مصرح: يرجى تسجيل الدخول مرة أخرى');
+          localStorage.removeItem('token');
+          localStorage.removeItem('role');
+          localStorage.removeItem('userId');
+          navigate('/login');
+        }
+      });
   };
 
   const handleOrderCancel = () => {
     setShowOrderForm(false);
-    setOrderForm({ customerName: '', phone: '', address: '' });
+    setOrderForm({ address: '' });
   };
 
   const openMedia = (media, type) => {
@@ -133,32 +217,40 @@ const Home = () => {
 
   const closeMedia = () => setSelectedMedia(null);
 
-  const handlePrevImage = (productId, imageCount) => {
-    setCurrentImageIndex(prev => ({
-      ...prev,
-      [productId]: (prev[productId] - 1 + imageCount) % imageCount
-    }));
-    clearInterval(intervalRefs.current[productId]);
-    intervalRefs.current[productId] = setInterval(() => {
-      setCurrentImageIndex(prev => ({
-        ...prev,
-        [productId]: (prev[productId] + 1) % imageCount
+  const handlePrevMedia = (productId, product) => {
+    const totalMedia = (product.videos?.length || 0) + (product.images?.length || 0);
+    setCurrentMediaIndex(prev => {
+      const currentIndex = prev[productId] || 0;
+      const nextIndex = (currentIndex - 1 + totalMedia) % totalMedia;
+      const mediaType = nextIndex < (product.videos?.length || 0) ? 'video' : 'image';
+      setCurrentMediaType(prevType => ({
+        ...prevType,
+        [productId]: mediaType
       }));
-    }, 3000);
+      return {
+        ...prev,
+        [productId]: nextIndex
+      };
+    });
+    clearInterval(intervalRefs.current[productId]);
   };
 
-  const handleNextImage = (productId, imageCount) => {
-    setCurrentImageIndex(prev => ({
-      ...prev,
-      [productId]: (prev[productId] + 1) % imageCount
-    }));
-    clearInterval(intervalRefs.current[productId]);
-    intervalRefs.current[productId] = setInterval(() => {
-      setCurrentImageIndex(prev => ({
-        ...prev,
-        [productId]: (prev[productId] + 1) % imageCount
+  const handleNextMedia = (productId, product) => {
+    const totalMedia = (product.videos?.length || 0) + (product.images?.length || 0);
+    setCurrentMediaIndex(prev => {
+      const currentIndex = prev[productId] || 0;
+      const nextIndex = (currentIndex + 1) % totalMedia;
+      const mediaType = nextIndex < (product.videos?.length || 0) ? 'video' : 'image';
+      setCurrentMediaType(prevType => ({
+        ...prevType,
+        [productId]: mediaType
       }));
-    }, 3000);
+      return {
+        ...prev,
+        [productId]: nextIndex
+      };
+    });
+    clearInterval(intervalRefs.current[productId]);
   };
 
   const cardVariants = {
@@ -209,6 +301,9 @@ const Home = () => {
     },
   };
 
+  const role = localStorage.getItem('role');
+  const isCustomer = role === 'customer';
+
   return (
     <motion.div
       className="min-h-screen flex flex-col items-center bg-gradient-to-b from-gray-900 to-gray-800 p-4 sm:p-6 text-white"
@@ -217,25 +312,51 @@ const Home = () => {
       transition={{ duration: 0.5 }}
       style={{ willChange: 'opacity' }}
     >
-      <div className="flex justify-between items-center w-full max-w-7xl mb-6">
+      {error && (
+        <motion.p
+          className="text-center text-red-400 text-lg mb-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          {error}
+        </motion.p>
+      )}
+      <div className="flex flex-col sm:flex-row justify-between items-center w-full max-w-7xl mb-6 gap-4">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
           🛒 المنتجات المتاحة
         </h1>
-        <motion.button
-          onClick={() => setShowCartModal(true)}
-          className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-500 to-blue-700 shadow-lg"
-          variants={buttonVariants}
-          whileHover="hover"
-          whileTap="tap"
-        >
-          🛒 السلة ({cart.reduce((acc, item) => acc + item.quantity, 0)})
-        </motion.button>
+        <div className="flex items-center gap-4">
+          <motion.select
+            value={filterType}
+            onChange={e => setFilterType(e.target.value)}
+            className="p-2 rounded-xl bg-[#2A2A3E] text-white text-sm border border-gray-200/30 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            whileHover={{ scale: 1.02 }}
+            whileFocus={{ scale: 1.02 }}
+          >
+            <option value="">الكل</option>
+            <option value="رجالي">رجالي</option>
+            <option value="حريمي">حريمي</option>
+            <option value="أطفال">أطفال</option>
+          </motion.select>
+          {isCustomer && (
+            <motion.button
+              onClick={() => setShowCartModal(true)}
+              className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-500 to-blue-700 shadow-lg"
+              variants={buttonVariants}
+              whileHover="hover"
+              whileTap="tap"
+            >
+              🛒 السلة ({cart.reduce((acc, item) => acc + item.quantity, 0)})
+            </motion.button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full max-w-7xl">
-        {products.length === 0 ? (
+        {filteredProducts.length === 0 ? (
           <p className="text-gray-400 text-xl col-span-full text-center">لا توجد منتجات متاحة أو جاري التحميل...</p>
         ) : (
-          products.map(product => (
+          filteredProducts.map(product => (
             <motion.div
               key={product._id}
               className="bg-[#1F1F2E] rounded-2xl shadow-xl overflow-hidden border border-gray-600/50 transition-all duration-300 flex flex-col"
@@ -245,23 +366,20 @@ const Home = () => {
               whileHover="hover"
             >
               <div className="relative w-full aspect-[4/3] bg-gray-800">
-                {product.images && product.images.length > 0 ? (
+                {(product.videos && product.videos.length > 0 && currentMediaType[product._id] === 'video') ? (
                   <>
-                    <img
-                      src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[currentImageIndex[product._id] || 0]}`}
-                      alt={`${product.name}`}
+                    <video
+                      src={`${process.env.REACT_APP_API_URL}/uploads/${product.videos[currentMediaIndex[product._id] || 0]}`}
+                      controls
                       className="w-full h-full object-contain rounded-t-xl transition-transform duration-300"
-                      onClick={() => openMedia(product.images[currentImageIndex[product._id] || 0], 'image')}
-                      onError={(e) => {
-                        console.error('خطأ في تحميل الصورة:', e);
-                        e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                      }}
+                      onClick={() => openMedia(product.videos[currentMediaIndex[product._id] || 0], 'video')}
+                      onError={(e) => console.error('خطأ في تحميل الفيديو:', e)}
                     />
-                    {product.images.length > 1 && (
+                    {(product.videos.length + (product.images?.length || 0)) > 1 && (
                       <div className="absolute inset-x-0 bottom-2 flex justify-between px-4">
                         <motion.button
                           className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
-                          onClick={() => handlePrevImage(product._id, product.images.length)}
+                          onClick={() => handlePrevMedia(product._id, product)}
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
                         >
@@ -269,7 +387,40 @@ const Home = () => {
                         </motion.button>
                         <motion.button
                           className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
-                          onClick={() => handleNextImage(product._id, product.images.length)}
+                          onClick={() => handleNextMedia(product._id, product)}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          →
+                        </motion.button>
+                      </div>
+                    )}
+                  </>
+                ) : (product.images && product.images.length > 0) ? (
+                  <>
+                    <img
+                      src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[(currentMediaIndex[product._id] || 0) - (product.videos?.length || 0)]}`}
+                      alt={`${product.name}`}
+                      className="w-full h-full object-contain rounded-t-xl transition-transform duration-300"
+                      onClick={() => openMedia(product.images[(currentMediaIndex[product._id] || 0) - (product.videos?.length || 0)], 'image')}
+                      onError={(e) => {
+                        console.error('خطأ في تحميل الصورة:', e);
+                        e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`;
+                      }}
+                    />
+                    {(product.videos.length + (product.images?.length || 0)) > 1 && (
+                      <div className="absolute inset-x-0 bottom-2 flex justify-between px-4">
+                        <motion.button
+                          className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
+                          onClick={() => handlePrevMedia(product._id, product)}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          ←
+                        </motion.button>
+                        <motion.button
+                          className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
+                          onClick={() => handleNextMedia(product._id, product)}
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
                         >
@@ -293,9 +444,9 @@ const Home = () => {
                 <h2 className="text-xl sm:text-2xl font-semibold mb-3 text-right bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
                   {product.name}
                 </h2>
-                {product.videos && product.videos.length > 0 && (
+                {(product.videos?.length > 0 || product.images?.length > 0) && (
                   <div className="flex flex-wrap gap-2 mb-3 justify-end">
-                    {product.videos.map((vid, idx) => (
+                    {product.videos?.map((vid, idx) => (
                       <video
                         key={`vid-${idx}`}
                         src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`}
@@ -303,6 +454,29 @@ const Home = () => {
                         className="w-20 h-20 object-cover rounded-lg cursor-pointer shadow-sm"
                         onClick={() => openMedia(vid, 'video')}
                         onError={(e) => console.error('خطأ في تحميل الفيديو:', e)}
+                      />
+                    ))}
+                    {product.images?.map((img, idx) => (
+                      <img
+                        key={`img-${idx}`}
+                        src={`${process.env.REACT_APP_API_URL}/uploads/${img}`}
+                        alt={`صورة ${idx + 1}`}
+                        className="w-20 h-20 object-cover rounded-lg cursor-pointer shadow-sm"
+                        onClick={() => {
+                          setCurrentMediaIndex(prev => ({
+                            ...prev,
+                            [product._id]: idx + (product.videos?.length || 0)
+                          }));
+                          setCurrentMediaType(prev => ({
+                            ...prev,
+                            [product._id]: 'image'
+                          }));
+                          openMedia(img, 'image');
+                        }}
+                        onError={(e) => {
+                          console.error('خطأ في تحميل الصورة:', e);
+                          e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`;
+                        }}
                       />
                     ))}
                   </div>
@@ -324,15 +498,17 @@ const Home = () => {
                   <p>🏭 المصنع: {product.manufacturer}</p>
                   <p className="text-gray-400 line-clamp-2">{product.description}</p>
                 </div>
-                <motion.button
-                  onClick={() => addToCart(product)}
-                  className="w-full mt-4 py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300"
-                  variants={buttonVariants}
-                  whileHover="hover"
-                  whileTap="tap"
-                >
-                  🛒 إضافة إلى السلة
-                </motion.button>
+                {isCustomer && (
+                  <motion.button
+                    onClick={() => addToCart(product)}
+                    className="w-full mt-4 py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                    variants={buttonVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    🛒 إضافة إلى السلة
+                  </motion.button>
+                )}
                 <AnimatePresence>
                   {showAddedToCart === product._id && (
                     <motion.div
@@ -351,10 +527,9 @@ const Home = () => {
           ))
         )}
       </div>
-
       {/* Modal لعرض السلة */}
       <AnimatePresence>
-        {showCartModal && (
+        {showCartModal && isCustomer && (
           <motion.div
             className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
             initial="hidden"
@@ -382,7 +557,7 @@ const Home = () => {
                         className="w-16 h-16 object-cover rounded-lg"
                         onError={(e) => {
                           console.error('خطأ في تحميل صورة السلة:', e);
-                          e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
+                          e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`;
                         }}
                       />
                       <div className="text-right">
@@ -439,10 +614,9 @@ const Home = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Modal لإدخال بيانات الطلب */}
       <AnimatePresence>
-        {showOrderForm && (
+        {showOrderForm && isCustomer && (
           <motion.div
             className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
             initial="hidden"
@@ -458,20 +632,6 @@ const Home = () => {
               <h2 className="text-xl sm:text-2xl font-semibold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
                 إدخال بيانات الطلب
               </h2>
-              <input
-                type="text"
-                placeholder="اسم العميل"
-                value={orderForm.customerName}
-                onChange={(e) => setOrderForm({ ...orderForm, customerName: e.target.value })}
-                className="w-full p-3 mb-4 border border-gray-200/30 rounded-xl bg-[#2A2A3E] text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="رقم الهاتف"
-                value={orderForm.phone}
-                onChange={(e) => setOrderForm({ ...orderForm, phone: e.target.value })}
-                className="w-full p-3 mb-4 border border-gray-200/30 rounded-xl bg-[#2A2A3E] text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
               <input
                 type="text"
                 placeholder="العنوان"
@@ -503,7 +663,6 @@ const Home = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Modal لفتح الصورة/الفيديو */}
       <AnimatePresence>
         {selectedMedia && (
@@ -515,7 +674,10 @@ const Home = () => {
             variants={modalVariants}
             onClick={closeMedia}
           >
-            <motion.div className="relative" onClick={(e) => e.stopPropagation()}>
+            <motion.div
+              className="relative"
+              onClick={(e) => e.stopPropagation()}
+            >
               {selectedMedia.type === 'image' ? (
                 <img
                   src={selectedMedia.url}
@@ -523,7 +685,7 @@ const Home = () => {
                   alt="صورة كاملة"
                   onError={(e) => {
                     console.error('خطأ في تحميل الصورة في المودال:', e);
-                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
+                    e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`;
                   }}
                 />
               ) : (
@@ -535,9 +697,14 @@ const Home = () => {
                   onError={(e) => console.error('خطأ في تحميل الفيديو في المودال:', e)}
                 />
               )}
-              <button className="absolute top-2 right-2 text-white text-2xl bg-gray-900/70 rounded-full p-2 hover:bg-gray-900/90">
+              <motion.button
+                onClick={closeMedia}
+                className="absolute top-2 right-2 text-red-500 text-2xl bg-gray-900/70 rounded-full p-2 hover:bg-gray-900/90 hover:text-red-400"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
                 ×
-              </button>
+              </motion.button>
             </motion.div>
           </motion.div>
         )}

@@ -1,7 +1,16 @@
 // backend/models/Order.js
 const mongoose = require('mongoose');
 
+const Counter = mongoose.model('Counter', new mongoose.Schema({
+  name: String,
+  seq: Number
+}));
+
 const orderSchema = new mongoose.Schema({
+  orderNumber: {
+    type: Number,
+    unique: true
+  },
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
@@ -39,6 +48,45 @@ const orderSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  messages: [{
+    from: {
+      type: String,
+      enum: ['vendor', 'customer'],
+      required: true,
+    },
+    text: {
+      type: String,
+      default: '', // السماح بالنص الفارغ
+    },
+    image: {
+      type: String,
+      default: null,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+    isDelivered: {
+      type: Boolean,
+      default: false,
+    },
+    isRead: {
+      type: Boolean,
+      default: false,
+    },
+  }],
+});
+
+orderSchema.pre('save', async function(next) {
+  if (this.isNew) {
+    const counter = await Counter.findOneAndUpdate(
+      { name: 'orderNumber' },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    this.orderNumber = counter.seq;
+  }
+  next();
 });
 
 module.exports = mongoose.model('Order', orderSchema);

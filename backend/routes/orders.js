@@ -5,195 +5,384 @@ const Order = require('../models/Order');
 const auth = require('../middleware/auth');
 const Product = require('../models/Product');
 const Customer = require('../models/Customer');
+const Vendor = require('../models/Vendor');
+const multer = require('multer');
+const path = require('path');
+
+// === إعداد Multer لتخزين الصور في مجلد Uploads (بكبيتل) ===
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '..', 'Uploads'));
+  },
+  filename: (req, file, cb) => {
+    const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+    cb(null, filename);
+  },
+});
+const upload = multer({ storage });
 
 console.log('Orders route loaded');
 
-// عرض الطلبات (مصفاة بناءً على الدور، مع دعم فلاتر جديدة)
+// === دالة لحساب عدد الرسائل غير المقروءة لمستخدم معين ===
+const calculateUnreadCount = (messages, userRole) => {
+  const fromField = userRole === 'vendor' ? 'customer' : 'vendor';
+  return (messages || []).filter(msg => msg.from === fromField && !msg.isRead).length;
+};
+
+// === دالة لإرسال تحديث unreadCount لكل المستخدمين المرتبطين ===
+const broadcastUnreadUpdate = async (orderId, io) => {
+  try {
+    const order = await Order.findById(orderId)
+      .populate('user', '_id')
+      .populate({ path: 'product', populate: { path: 'vendor', select: '_id' } });
+
+    if (!order) return;
+
+    const adminRoom = 'admin_room';
+    const customerRoom = `user_${order.user._id}`;
+    const vendorRoom = `user_${order.product.vendor._id}`;
+
+    const messages = order.messages || [];
+    const customerUnread = calculateUnreadCount(messages, 'customer');
+    const vendorUnread = calculateUnreadCount(messages, 'vendor');
+
+    // إرسال للعميل
+    io.to(customerRoom).emit('unreadUpdate', { orderId, unreadCount: customerUnread });
+    // إرسال للتاجر
+    io.to(vendorRoom).emit('unreadUpdate', { orderId, unreadCount: vendorUnread });
+    // إرسال للأدمن
+    io.to(adminRoom).emit('unreadUpdate', { orderId, unreadCount: vendorUnread }); // الأدمن يرى من العميل
+  } catch (err) {
+    console.error('Error broadcasting unread update:', err);
+  }
+};
+
+// === عرض الطلبات (مع كل الفلاتر الجديدة) ===
 router.get('/', auth, async (req, res) => {
   try {
     console.log(`Fetching orders for user: ${req.user.id}, role: ${req.user.role}`);
-    const { vendorName, startDate, endDate, phone } = req.query;
+    const {
+      vendorName,
+      startDate,
+      endDate,
+      phone,
+      orderNumber,
+      status,
+      unreadOnly,
+      page = 1,
+      limit
+    } = req.query;
+
     let query = {};
-    // فلتر بالتاريخ
+
+    // فلتر التاريخ
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-    // فلتر برقم الهاتف
-    if (phone) {
-      query.phone = { $regex: phone, $options: 'i' };
-    }
-    let orders;
-    if (req.user.role === 'admin') {
-      if (vendorName) {
-        const vendors = await Product.aggregate([
-          { $lookup: { from: 'vendors', localField: 'vendor', foreignField: '_id', as: 'vendorInfo' } },
-          { $match: { 'vendorInfo.name': { $regex: vendorName, $options: 'i' } } }
-        ]);
-        const productIds = vendors.map(v => v._id);
-        query.product = { $in: productIds };
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
       }
-      orders = await Order.find(query)
-        .populate({
-          path: 'product',
-          select: 'name vendor',
-          populate: { path: 'vendor', select: 'name' }
-        })
-        .populate('user', 'name phone');
-    } else if (req.user.role === 'vendor') {
-      console.log(`Fetching products for vendor: ${req.user.id}`);
+    }
+
+    // فلتر رقم الطلب
+    if (orderNumber) {
+      const num = parseInt(orderNumber);
+      if (!isNaN(num)) {
+        query.orderNumber = num;
+      }
+    }
+
+    // فلتر الحالة (يمكن تكرارها)
+    if (status) {
+      const statuses = Array.isArray(status) ? status : [status];
+      if (statuses.length > 0) {
+        query.status = { $in: statuses };
+      }
+    }
+
+    // فلتر رقم الهاتف
+    if (phone) {
+      const users = await Customer.find({ phone: { $regex: phone, $options: 'i' } }).select('_id');
+      if (users.length > 0) {
+        query.user = { $in: users.map(u => u._id) };
+      } else {
+        return res.json({ orders: [], total: 0 });
+      }
+    }
+
+    // فلتر الرسائل غير المقروءة فقط (للمستخدم الحالي)
+    if (unreadOnly === 'true') {
+      const role = req.user.role;
+      const fromField = role === 'vendor' ? 'customer' : 'vendor';
+      query['messages'] = {
+        $elemMatch: {
+          from: fromField,
+          isRead: false
+        }
+      };
+    }
+
+    // بناء الاستعلام الأساسي
+    let ordersQuery = Order.find(query)
+      .populate({
+        path: 'product',
+        select: 'name vendor',
+        populate: { path: 'vendor', select: 'name' }
+      })
+      .populate('user', 'name phone')
+      .sort({ createdAt: -1 });
+
+    // تطبيق الـ pagination
+    if (limit) {
+      const limitNum = parseInt(limit);
+      const skip = (parseInt(page) - 1) * limitNum;
+      ordersQuery = ordersQuery.skip(skip).limit(limitNum);
+    }
+
+    let orders = await ordersQuery.lean();
+
+    // حساب عدد الرسائل غير المقروءة لكل طلب
+    const role = req.user.role;
+    orders = orders.map(order => {
+      const unreadCount = calculateUnreadCount(order.messages, role);
+      return { ...order, unreadCount };
+    });
+
+    // فلتر حسب التاجر (للأدمن)
+    if (req.user.role === 'admin' && vendorName) {
+      const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id');
+      const vendorIds = vendors.map(v => v._id);
+      const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id');
+      const productIds = products.map(p => p._id);
+
+      orders = orders.filter(order => productIds.some(id => id.equals(order.product._id)));
+    }
+
+    // فلتر حسب التاجر (للتاجر نفسه)
+    if (req.user.role === 'vendor') {
       const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id');
       const productIds = vendorProducts.map(p => p._id);
-      console.log(`Vendor product IDs: ${productIds}`);
-      query.product = { $in: productIds };
-      orders = await Order.find(query)
-        .populate({
-          path: 'product',
-          select: 'name',
-          populate: { path: 'vendor', select: 'name' }
-        })
-        .populate('user', 'name phone');
-    } else {
-      query.user = req.user.id;
-      orders = await Order.find(query)
-        .populate({
-          path: 'product',
-          select: 'name vendor',
-          populate: { path: 'vendor', select: 'name' }
-        })
-        .populate('user', 'name phone');
+      orders = orders.filter(order => productIds.some(id => id.equals(order.product._id)));
     }
-    console.log(`Fetched orders: ${orders.length}`, orders);
-    res.json(orders);
+
+    // فلتر حسب العميل (للعميل)
+    if (req.user.role === 'customer') {
+      orders = orders.filter(order => order.user && order.user._id.equals(req.user.id));
+    }
+
+    // حساب العدد الكلي بعد الفلاتر
+    const totalQuery = { ...query };
+    if (req.user.role === 'admin' && vendorName) {
+      const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id');
+      const vendorIds = vendors.map(v => v._id);
+      const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id');
+      const productIds = products.map(p => p._id);
+      totalQuery.product = { $in: productIds };
+    } else if (req.user.role === 'vendor') {
+      const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id');
+      const productIds = vendorProducts.map(p => p._id);
+      totalQuery.product = { $in: productIds };
+    } else if (req.user.role === 'customer') {
+      totalQuery.user = req.user.id;
+    }
+
+    const total = await Order.countDocuments(totalQuery);
+
+    console.log(`Fetched ${orders.length} orders, total: ${total}`);
+    res.json({ orders, total });
   } catch (err) {
-    console.error('Detailed error in GET /api/orders:', {
-      message: err.message,
-      stack: err.stack,
-      user: req.user
-    });
+    console.error('Detailed Retrieval Error:', err);
     res.status(500).json({ message: 'خطأ داخلي في السيرفر: ' + err.message });
   }
 });
 
-// إضافة طلب جديد (يتطلب تسجيل دخول)
+// === إضافة طلب جديد ===
 router.post('/', auth, async (req, res) => {
   const { product, vendor, quantity, address, selectedImage } = req.body;
   try {
-    console.log('POST /api/orders received:', req.body);
-    // التحقق من وجود المنتج
     const productDoc = await Product.findById(product);
-    if (!productDoc) {
-      return res.status(404).json({ message: 'المنتج غير موجود' });
-    }
-    // التحقق من صحة التاجر
-    if (vendor !== productDoc.vendor.toString()) {
-      return res.status(400).json({ message: 'التاجر غير صحيح لهذا المنتج' });
-    }
-    // استخدام معرف المستخدم من التوكن
-    const userId = req.user.id;
-    const customer = await Customer.findById(userId);
-    if (!customer) {
-      return res.status(404).json({ message: 'العميل غير موجود' });
-    }
+    if (!productDoc) return res.status(404).json({ message: 'المنتج غير موجود' });
+    if (vendor !== productDoc.vendor.toString()) return res.status(400).json({ message: 'التاجر غير صحيح' });
+
+    const customer = await Customer.findById(req.user.id);
+    if (!customer) return res.status(404).json({ message: 'العميل غير موجود' });
+
     const order = new Order({
-      product,
-      vendor,
-      user: userId,
-      quantity,
-      address,
-      status: 'pending', // الحالة الافتراضية
-      selectedImage: selectedImage || 'placeholder-image.jpg'
+      product, vendor, user: req.user.id, quantity, address,
+      status: 'pending', selectedImage: selectedImage || 'placeholder-image.jpg'
     });
     await order.save();
-    console.log('Saved order:', order);
-    res.status(201).json({ message: 'تم إنشاء الطلب بنجاح', order });
+
+    const populatedOrder = await Order.findById(order._id)
+      .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
+      .populate('user', 'name phone');
+
+    res.status(201).json({ message: 'تم إنشاء الطلب', order: populatedOrder });
   } catch (err) {
-    console.error('Error in POST /api/orders:', {
-      message: err.message,
-      stack: err.stack
-    });
+    console.error('Error creating order:', err);
     res.status(400).json({ message: err.message });
   }
 });
 
-// تحديث حالة الطلب (للتاجر فقط)
+// === تحديث حالة الطلب ===
 router.put('/:id/status', auth, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'الطلب غير موجود' });
-    }
-    if (req.user.role !== 'vendor' || order.vendor.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'غير مصرح - فقط التاجر المرتبط يمكنه تحديث الحالة' });
-    }
+    let order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
+    if (req.user.role !== 'vendor' || order.vendor.toString() !== req.user.id)
+      return res.status(403).json({ message: 'غير مصرح' });
+
     const { status } = req.body;
-    if (!['pending', 'shipped', 'delivered', 'rejected'].includes(status)) {
+    if (!['pending', 'shipped', 'delivered', 'rejected'].includes(status))
       return res.status(400).json({ message: 'حالة غير صالحة' });
-    }
+
     order.status = status;
     await order.save();
-    res.json({ message: 'تم تحديث حالة الطلب', order });
+
+    const populated = await Order.findById(order._id)
+      .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
+      .populate('user', 'name phone');
+
+    res.json({ message: 'تم تحديث الحالة', order: populated });
   } catch (err) {
-    console.error('Error in PUT /api/orders/:id/status:', {
-      message: err.message,
-      stack: err.stack
-    });
+    console.error('Status update error:', err);
     res.status(400).json({ message: err.message });
   }
 });
 
-// تعديل الطلب (للعميل فقط، إذا كان الطلب في حالة pending)
+// === تعديل الطلب ===
 router.put('/:id', auth, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'الطلب غير موجود' });
-    }
-    if (req.user.role !== 'customer' || order.user.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'غير مصرح - فقط العميل المرتبط يمكنه تعديل الطلب' });
-    }
-    if (order.status !== 'pending') {
-      return res.status(403).json({ message: 'لا يمكن تعديل الطلب لأنه ليس في حالة تحت المراجعة' });
-    }
+    let order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
+    if (req.user.role !== 'customer' || order.user.toString() !== req.user.id)
+      return res.status(403).json({ message: 'غير مصرح' });
+    if (order.status !== 'pending')
+      return res.status(403).json({ message: 'لا يمكن التعديل' });
+
     const { quantity, address } = req.body;
-    if (quantity !== undefined) {
-      if (quantity < 1) {
-        return res.status(400).json({ message: 'الكمية يجب أن تكون أكبر من 0' });
-      }
-      order.quantity = quantity;
-    }
-    if (address !== undefined) {
-      order.address = address;
-    }
+    if (quantity !== undefined && quantity < 1) return res.status(400).json({ message: 'الكمية يجب > 0' });
+    if (quantity !== undefined) order.quantity = quantity;
+    if (address !== undefined) order.address = address;
+
     await order.save();
-    res.json({ message: 'تم تعديل الطلب بنجاح', order });
+
+    const populated = await Order.findById(order._id)
+      .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
+      .populate('user', 'name phone');
+
+    res.json({ message: 'تم التعديل', order: populated });
   } catch (err) {
-    console.error('Error in PUT /api/orders/:id:', {
-      message: err.message,
-      stack: err.stack
-    });
+    console.error('Edit error:', err);
     res.status(400).json({ message: err.message });
   }
 });
 
-// حذف طلب (للأدمن فقط)
+// === حذف طلب ===
 router.delete('/:id', auth, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'الطلب غير موجود' });
+    if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
+    if (req.user.role === 'admin' || (req.user.role === 'customer' && order.user.toString() === req.user.id && order.status === 'pending')) {
+      await Order.findByIdAndDelete(req.params.id);
+      res.json({ message: 'تم الحذف' });
+    } else {
+      res.status(403).json({ message: 'غير مصرح' });
     }
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'غير مصرح - فقط الأدمن يمكنه حذف الطلبات' });
-    }
-    await Order.findByIdAndDelete(req.params.id);
-    res.json({ message: 'تم حذف الطلب' });
   } catch (err) {
-    console.error('Error in DELETE /api/orders/:id:', {
-      message: err.message,
-      stack: err.stack
-    });
+    console.error('Delete error:', err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// === إضافة رسالة (الحل النهائي) ===
+router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
+
+    const { text } = req.body;
+    const image = req.file ? req.file.filename : null;
+
+    if (!text && !image) return res.status(400).json({ message: 'يجب إرسال نص أو صورة' });
+
+    let from;
+    if (req.user.role === 'vendor' && order.vendor.toString() === req.user.id) from = 'vendor';
+    else if (req.user.role === 'customer' && order.user.toString() === req.user.id) from = 'customer';
+    else return res.status(403).json({ message: 'غير مصرح' });
+
+    const messageObj = { from, text: text || '', image, timestamp: new Date(), isDelivered: false, isRead: false };
+    order.messages.push(messageObj);
+    await order.save();
+
+    // تحديث isDelivered إذا كان المستلم متصل
+    const recipientId = from === 'vendor' ? order.user.toString() : order.vendor.toString();
+    const onlineUsers = req.app.get('onlineUsers') || new Set();
+    if (onlineUsers.has(recipientId)) {
+      order.messages[order.messages.length - 1].isDelivered = true;
+      await order.save();
+    }
+
+    // جلب الطلب كاملاً بعد التحديث
+    const populatedOrder = await Order.findById(order._id)
+      .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
+      .populate('user', 'name phone');
+
+    const io = req.app.get('io');
+    const room = `order_${req.params.id}`;
+    io.to(room).emit('newMessage', messageObj);
+    io.to(room).emit('messagesUpdated', populatedOrder.messages);
+
+    // إرسال تحديث unreadCount للجميع
+    await broadcastUnreadUpdate(req.params.id, io);
+
+    // إرجاع الطلب كاملاً (لا الرسالة فقط)
+    res.json({ message: 'تم إرسال الرسالة', order: populatedOrder });
+  } catch (err) {
+    console.error('Message send error:', err);
+    res.status(500).json({ message: 'خطأ في السيرفر: ' + err.message });
+  }
+});
+
+// === تحديث قراءة الرسائل ===
+router.post('/:id/markRead', auth, async (req, res) => {
+  try {
+    let order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
+
+    const role = req.user.role;
+    if ((role === 'customer' && order.user.toString() !== req.user.id) ||
+        (role === 'vendor' && order.vendor.toString() !== req.user.id)) {
+      return res.status(403).json({ message: 'غير مصرح' });
+    }
+
+    const from = role === 'customer' ? 'vendor' : 'customer';
+    let updated = false;
+
+    for (let msg of order.messages) {
+      if (msg.from === from) {
+        if (!msg.isDelivered) { msg.isDelivered = true; updated = true; }
+        if (!msg.isRead) { msg.isRead = true; updated = true; }
+      }
+    }
+
+    if (updated) await order.save();
+
+    const io = req.app.get('io');
+    io.to(`order_${req.params.id}`).emit('messagesUpdated', order.messages);
+
+    // تحديث unreadCount للجميع
+    await broadcastUnreadUpdate(req.params.id, io);
+
+    const populatedOrder = await Order.findById(order._id)
+      .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
+      .populate('user', 'name phone');
+
+    res.json({ message: 'تم تحديث القراءة', order: populatedOrder });
+  } catch (err) {
+    console.error('Mark read error:', err);
     res.status(400).json({ message: err.message });
   }
 });

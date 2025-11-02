@@ -18,7 +18,6 @@ function CreateVendor() {
       alert('يرجى تسجيل الدخول كأدمن أولاً!');
       return;
     }
-
     axios.get(`${process.env.REACT_APP_API_URL}/api/vendors`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -35,7 +34,6 @@ function CreateVendor() {
       alert('يرجى تسجيل الدخول كأدمن أولاً!');
       return;
     }
-
     const formData = new FormData();
     formData.append('name', form.name);
     formData.append('email', form.email);
@@ -45,7 +43,7 @@ function CreateVendor() {
 
     if (isEditing) {
       axios.put(`${process.env.REACT_APP_API_URL}/api/vendors/${editingId}`, formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         },
@@ -58,7 +56,7 @@ function CreateVendor() {
         .catch(err => alert('خطأ في التعديل: ' + (err.response?.data?.message || err.message)));
     } else {
       axios.post(`${process.env.REACT_APP_API_URL}/api/vendors`, formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         },
@@ -73,9 +71,10 @@ function CreateVendor() {
   };
 
   const handleEdit = (vendor) => {
+    console.log('Editing vendor data:', vendor); // للتصحيح: شوف البيانات اللي بتيجي هنا
     setForm({
-      name: vendor.name,
-      email: vendor.email,
+      name: vendor.name || '',
+      email: vendor.email || '',
       password: '',
       description: vendor.description || '',
       logo: null
@@ -86,7 +85,6 @@ function CreateVendor() {
 
   const handleDelete = (id) => {
     if (!window.confirm('هل أنت متأكد من حذف هذا التاجر؟')) return;
-
     const token = localStorage.getItem('token');
     axios.delete(`${process.env.REACT_APP_API_URL}/api/vendors/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -178,8 +176,8 @@ function CreateVendor() {
             whileHover="hover"
             whileFocus="focus"
           />
-          <motion.button 
-            onClick={handleSubmit} 
+          <motion.button
+            onClick={handleSubmit}
             className="w-full bg-green-600/80 text-white py-3 rounded-xl hover:bg-green-600 transition duration-200 font-semibold"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -187,8 +185,8 @@ function CreateVendor() {
             {isEditing ? '💾 حفظ التعديلات' : '👨‍💼 إنشاء التاجر'}
           </motion.button>
           {isEditing && (
-            <motion.button 
-              onClick={resetForm} 
+            <motion.button
+              onClick={resetForm}
               className="w-full bg-red-600/80 text-white py-3 rounded-xl hover:bg-red-600 transition duration-200 font-semibold"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -198,7 +196,6 @@ function CreateVendor() {
           )}
         </div>
       </motion.div>
-
       <h2 className="text-xl font-semibold mb-4 text-center">قائمة التجار</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl">
         {vendors.length === 0 ? (
@@ -214,10 +211,10 @@ function CreateVendor() {
               whileHover="hover"
             >
               {vendor.logo ? (
-                <img 
-                  src={`${process.env.REACT_APP_API_URL}/uploads/${vendor.logo}`} 
-                  alt={`لوجو ${vendor.name}`} 
-                  className="w-24 h-24 object-contain rounded-lg mb-4 mx-auto border border-gray-500" 
+                <img
+                  src={`${process.env.REACT_APP_API_URL}/uploads/${vendor.logo}`}
+                  alt={`لوجو ${vendor.name}`}
+                  className="w-24 h-24 object-contain rounded-lg mb-4 mx-auto border border-gray-500"
                   onError={(e) => {
                     console.error(`فشل تحميل صورة لـ ${vendor.name}: ${e.target.src}`);
                     e.target.src = '/default-logo.png';

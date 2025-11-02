@@ -13,7 +13,7 @@ const customerSchema = new mongoose.Schema({
     unique: true,
     validate: {
       validator: function (v) {
-        return /^\d{11}$/.test(v); // يجب أن يكون 11 رقمًا
+        return /^\d{11}$/.test(v);
       },
       message: 'رقم الهاتف يجب أن يتكون من 11 رقمًا',
     },
@@ -21,6 +21,14 @@ const customerSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
+  },
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
+  blockReason: {
+    type: String,
+    default: '',
   },
   createdAt: {
     type: Date,

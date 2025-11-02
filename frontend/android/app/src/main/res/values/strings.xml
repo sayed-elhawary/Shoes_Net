@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">shose-Net</string>
+    <string name="title_activity_main">shose-Net</string>
+    <string name="package_name">shose.duckdns.org</string>
+    <string name="custom_url_scheme">shose.duckdns.org</string>
+</resources>

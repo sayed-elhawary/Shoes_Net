@@ -1,22 +1,15 @@
-// frontend/src/pages/Login.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
-const CustomCheckIcon = () => (
-  <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-  </svg>
-);
-
 const CustomLoadingSpinner = () => (
-  <div className="flex items-center justify-center">
+  <div className="flex items-center justify-center gap-2">
     <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
     </svg>
-    <span className="mr-2">جارٍ التحميل...</span>
+    <span className="text-sm">جارٍ التحميل...</span>
   </div>
 );
 
@@ -24,14 +17,28 @@ const Login = () => {
   const [form, setForm] = useState({ emailOrPhone: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [showIntro, setShowIntro] = useState(true); // يتحكم في اللوجو + الرسالة
+  const [showForm, setShowForm] = useState(false);  // يتحكم في النموذج
   const navigate = useNavigate();
+
+  // === تسلسل الأنيميشن: لوغو → رسالة → اختفاء → نموذج ===
+  useEffect(() => {
+    const timer1 = setTimeout(() => {}, 800); // اللوجو يظهر فورًا
+    const timer2 = setTimeout(() => {}, 1600); // الرسالة تظهر بعد اللوجو
+    const timer3 = setTimeout(() => setShowIntro(false), 3200); // يختفي الكل
+    const timer4 = setTimeout(() => setShowForm(true), 3500);   // النموذج يظهر
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setSuccessMessage('');
     setLoading(true);
 
     try {
@@ -47,21 +54,17 @@ const Login = () => {
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('role', res.data.role);
       localStorage.setItem('userId', res.data.userId);
-      // Dispatch authChange event to notify App.js
       window.dispatchEvent(new Event('authChange'));
-      console.log('authChange event dispatched'); // Debug log
-      setSuccessMessage('تم تسجيل الدخول بنجاح');
-      setShowSuccessAnimation(true);
+
       setTimeout(() => {
-        setShowSuccessAnimation(false);
         if (res.data.role === 'admin') {
           navigate('/admin');
         } else if (res.data.role === 'vendor') {
           navigate('/vendor');
         } else {
-          navigate('/'); // العملاء يوجهون إلى Home
+          navigate('/');
         }
-      }, 1500);
+      }, 800);
     } catch (err) {
       setError(err.response?.data?.message || 'حدث خطأ، حاول مرة أخرى');
     } finally {
@@ -69,167 +72,180 @@ const Login = () => {
     }
   };
 
-  const formVariants = {
-    hidden: { opacity: 0, y: 20, scale: 0.98 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.6,
-        ease: [0.4, 0, 0.2, 1],
-        type: 'spring',
-        stiffness: 100,
-        damping: 20,
-      },
-    },
-  };
-
-  const inputVariants = {
-    hover: {
-      scale: 1.02,
-      borderColor: 'rgba(59, 130, 246, 0.5)',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    focus: {
-      scale: 1.02,
-      borderColor: 'rgba(59, 130, 246, 0.5)',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-  };
-
-  const buttonVariants = {
-    hover: {
-      scale: 1.05,
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
-      backgroundColor: 'rgba(59, 130, 246, 0.7)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    tap: {
-      scale: 0.98,
-      transition: { duration: 0.1, ease: 'easeOut' },
-    },
-  };
-
   return (
-    <motion.div
-      className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      style={{ willChange: 'opacity' }}
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      }}
     >
-      <motion.div
-        className="bg-[#1F1F2E] p-8 rounded-2xl shadow-2xl w-full max-w-md"
-        variants={formVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <h1 className="text-2xl font-bold text-center text-white mb-6">🔐 تسجيل الدخول</h1>
+      {/* خلفية ناعمة */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700"></div>
+      </div>
+
+      <div className="relative z-10 w-full max-w-md">
+        {/* === اللوجو + الرسالة (معًا في حاوية واحدة) === */}
         <AnimatePresence>
-          {error && (
+          {showIntro && (
             <motion.div
-              className="bg-red-500/10 text-red-400 p-3 rounded-lg mb-4 text-center"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center space-y-4"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ 
+                opacity: 0, 
+                scale: 0.9, 
+                y: -80,
+                transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] }
+              }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             >
-              {error}
-            </motion.div>
-          )}
-          {successMessage && !loading && (
-            <motion.div
-              className="bg-green-500/10 text-green-400 p-3 rounded-lg mb-4 text-center"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-            >
-              {successMessage}
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <motion.form
-          onSubmit={handleSubmit}
-          variants={formVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <div className="mb-4">
-            <label className="block text-white text-sm mb-2 text-right">البريد الإلكتروني أو رقم الهاتف</label>
-            <motion.input
-              type="text"
-              value={form.emailOrPhone}
-              onChange={(e) => setForm({ ...form, emailOrPhone: e.target.value })}
-              className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
-              required
-              disabled={loading}
-              placeholder="أدخل البريد الإلكتروني أو رقم الهاتف"
-              variants={inputVariants}
-              whileHover="hover"
-              whileFocus="focus"
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-white text-sm mb-2 text-right">كلمة المرور</label>
-            <motion.input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
-              required
-              disabled={loading}
-              placeholder="أدخل كلمة المرور"
-              variants={inputVariants}
-              whileHover="hover"
-              whileFocus="focus"
-            />
-          </div>
-          <motion.button
-            type="submit"
-            className="w-full p-3 rounded-xl text-white font-semibold"
-            style={{ backgroundColor: 'rgba(59, 130, 246, 0.5)' }}
-            variants={buttonVariants}
-            whileHover="hover"
-            whileTap="tap"
-            disabled={loading}
-          >
-            {loading ? <CustomLoadingSpinner /> : 'تسجيل الدخول'}
-          </motion.button>
-        </motion.form>
-        <p className="text-center mt-4 text-sm text-gray-400">
-          للأدمن: admin@test.com / 123456
-          <br />
-          للتاجر: أنشئ من لوحة الأدمن
-          <br />
-          للعملاء: اطلب حسابًا من الأدمن
-        </p>
-        <AnimatePresence>
-          {showSuccessAnimation && (
-            <motion.div
-              className="fixed inset-0 flex items-center justify-center bg-black/50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
+              {/* اللوجو مع الحلقة */}
+              <div className="relative">
+                <motion.div
+                  className="absolute inset-0 -m-4"
+                  initial={{ rotate: 0 }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                >
+                  <svg className="w-full h-full" viewBox="0 0 200 200">
+                    <defs>
+                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="50%" stopColor="#f87171" />
+                        <stop offset="100%" stopColor="#fca5a5" />
+                      </linearGradient>
+                    </defs>
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r="90"
+                      fill="none"
+                      stroke="url(#gradient)"
+                      strokeWidth="4"
+                      strokeDasharray="20 10"
+                      className="opacity-70"
+                    />
+                  </svg>
+                </motion.div>
+
+                <motion.img
+                  src="/icon.png"
+                  alt="SHOSE NET"
+                  className="w-40 h-40 object-contain drop-shadow-2xl relative z-10"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 1, delay: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
+                />
+              </div>
+
+              {/* الرسالة الترحيبية (تظهر بعد اللوجو) */}
               <motion.div
-                className="bg-white p-6 rounded-lg flex items-center justify-center"
-                initial={{ scale: 0.5 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.5 }}
-                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                className="text-center space-y-1"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 1.2 }}
               >
-                <CustomCheckIcon />
+                <p className="text-lg font-medium text-red-400 tracking-widest">
+                  أهلاً بك في
+                </p>
+                <p className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
+                  متجر SHOSE NET
+                </p>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
-    </motion.div>
+
+        {/* === نموذج تسجيل الدخول (يحل محل اللوجو بنعومة) === */}
+        <AnimatePresence>
+          {showForm && (
+            <motion.div
+              className="bg-slate-900/60 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-slate-700/50"
+              initial={{ 
+                opacity: 0, 
+                y: 60, 
+                scale: 0.92 
+              }}
+              animate={{ 
+                opacity: 1, 
+                y: 0, 
+                scale: 1 
+              }}
+              transition={{ 
+                duration: 0.9, 
+                ease: [0.22, 1, 0.36, 1],
+                delay: 0.1
+              }}
+            >
+              <h1 className="text-2xl font-bold text-center text-white mb-8">تسجيل الدخول</h1>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    className="bg-red-500/20 border border-red-500/50 text-red-300 p-3 rounded-xl mb-4 text-center text-sm"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label className="block text-white/80 text-sm mb-2 text-right font-medium">
+                    البريد أو الهاتف
+                  </label>
+                  <input
+                    type="text"
+                    value={form.emailOrPhone}
+                    onChange={(e) => setForm({ ...form, emailOrPhone: e.target.value })}
+                    className="w-full p-4 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all"
+                    placeholder="example@domain.com أو 01234567890"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white/80 text-sm mb-2 text-right font-medium">
+                    كلمة المرور
+                  </label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="w-full p-4 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all"
+                    placeholder="••••••••"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full p-4 rounded-xl text-white font-bold text-lg tracking-wide transition-all bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl"
+                  disabled={loading}
+                >
+                  {loading ? <CustomLoadingSpinner /> : 'دخول'}
+                </button>
+              </form>
+
+              <p className="text-center mt-6 text-slate-400 text-xs leading-relaxed">
+                للأدمن: admin@test.com / 123456
+                <br />
+                للتاجر: أنشئ من لوحة الأدمن
+                <br />
+                للعملاء: اطلب حسابًا من الأدمن
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 };
 

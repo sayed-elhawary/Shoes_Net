@@ -30,6 +30,14 @@ const customerSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  isPending: {
+    type: Boolean,
+    default: true,  // في انتظار الموافقة
+  },
+  isApproved: {
+    type: Boolean,
+    default: false, // لم تتم الموافقة بعد
+  },
   createdAt: {
     type: Date,
     default: Date.now,

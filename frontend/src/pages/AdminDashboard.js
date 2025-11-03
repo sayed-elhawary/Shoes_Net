@@ -1,3 +1,4 @@
+// frontend/src/pages/AdminDashboard.js
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -9,392 +10,291 @@ const AdminDashboard = () => {
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [currentMediaIndex, setCurrentMediaIndex] = useState({});
   const [currentMediaType, setCurrentMediaType] = useState({});
+  const [error, setError] = useState('');
   const intervalRefs = useRef({});
 
+  // === جلب المنتجات ===
   useEffect(() => {
-    // Load products
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('غير مصرح: يرجى تسجيل الدخول');
+      return;
+    }
+
     axios
       .get(`${process.env.REACT_APP_API_URL}/api/products/all-products`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       .then(res => {
         setProducts(res.data);
         setFilteredProducts(res.data);
-        const initialIndexes = res.data.reduce((acc, product) => ({
+        const initialIndexes = res.data.reduce((acc, p) => ({ ...acc, [p._id]: 0 }), {});
+        const initialTypes = res.data.reduce((acc, p) => ({
           ...acc,
-          [product._id]: 0
-        }), {});
-        const initialTypes = res.data.reduce((acc, product) => ({
-          ...acc,
-          [product._id]: product.videos && product.videos.length > 0 ? 'video' : 'image'
+          [p._id]: p.videos?.length > 0 ? 'video' : 'image'
         }), {});
         setCurrentMediaIndex(initialIndexes);
         setCurrentMediaType(initialTypes);
+        setError('');
       })
-      .catch(err => console.error('خطأ في جلب المنتجات:', err));
+      .catch(err => {
+        const msg = err.response?.data?.message || 'خطأ في جلب المنتجات';
+        setError(msg);
+        if (err.response?.status === 401) {
+          localStorage.clear();
+          window.location.href = '/login';
+        }
+      });
   }, []);
 
+  // === تصفية المنتجات ===
   useEffect(() => {
-    // Filter products based on filterType
-    if (filterType === '') {
-      setFilteredProducts(products);
-    } else {
-      setFilteredProducts(products.filter(product => product.type === filterType));
-    }
+    setFilteredProducts(filterType ? products.filter(p => p.type === filterType) : products);
   }, [filterType, products]);
 
+  // === تدوير الصور تلقائيًا ===
   useEffect(() => {
-    // Set up intervals for media rotation (only for images)
-    products.forEach(product => {
-      const totalImages = product.images?.length || 0;
-      if (totalImages > 1 && (!product.videos || product.videos.length === 0)) {
-        clearInterval(intervalRefs.current[product._id]);
-        intervalRefs.current[product._id] = setInterval(() => {
-          setCurrentMediaIndex(prev => {
-            const currentIndex = prev[product._id] || 0;
-            const nextIndex = (currentIndex + 1) % totalImages;
-            return {
-              ...prev,
-              [product._id]: nextIndex
-            };
-          });
-          setCurrentMediaType(prevType => ({
-            ...prevType,
-            [product._id]: 'image'
+    products.forEach(p => {
+      const totalImages = p.images?.length || 0;
+      if (totalImages > 1 && (!p.videos || p.videos.length === 0)) {
+        clearInterval(intervalRefs.current[p._id]);
+        intervalRefs.current[p._id] = setInterval(() => {
+          setCurrentMediaIndex(prev => ({
+            ...prev,
+            [p._id]: (prev[p._id] + 1) % totalImages
           }));
+          setCurrentMediaType(prev => ({ ...prev, [p._id]: 'image' }));
         }, 3000);
       }
     });
-    return () => {
-      Object.values(intervalRefs.current).forEach(clearInterval);
-    };
+    return () => Object.values(intervalRefs.current).forEach(clearInterval);
   }, [products]);
 
+  // === الموافقة على المنتج ===
   const handleApprove = (id) => {
+    const token = localStorage.getItem('token');
     axios
       .put(`${process.env.REACT_APP_API_URL}/api/products/${id}/approve`, {}, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .then(res => setProducts(products.map(p => (p._id === id ? res.data : p))))
-      .catch(err => alert('خطأ: ' + err.message));
+      .then(res => {
+        setProducts(prev => prev.map(p => p._id === id ? res.data : p));
+        alert('تمت الموافقة على المنتج بنجاح');
+      })
+      .catch(err => {
+        alert('خطأ في الموافقة: ' + (err.response?.data?.message || err.message));
+      });
   };
 
-  const openMedia = (media, type) => {
-    setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
-  };
-
+  // === الوسائط ===
+  const openMedia = (media, type) => setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
   const closeMedia = () => setSelectedMedia(null);
 
-  const handlePrevMedia = (productId, product) => {
-    const totalMedia = (product.videos?.length || 0) + (product.images?.length || 0);
+  const handlePrevMedia = (id, p) => {
+    const total = (p.videos?.length || 0) + (p.images?.length || 0);
     setCurrentMediaIndex(prev => {
-      const currentIndex = prev[productId] || 0;
-      const nextIndex = (currentIndex - 1 + totalMedia) % totalMedia;
-      const mediaType = nextIndex < (product.videos?.length || 0) ? 'video' : 'image';
-      setCurrentMediaType(prevType => ({
-        ...prevType,
-        [productId]: mediaType
-      }));
-      return {
-        ...prev,
-        [productId]: nextIndex
-      };
+      const next = (prev[id] - 1 + total) % total;
+      setCurrentMediaType(t => ({ ...t, [id]: next < (p.videos?.length || 0) ? 'video' : 'image' }));
+      return { ...prev, [id]: next };
     });
-    clearInterval(intervalRefs.current[productId]);
+    clearInterval(intervalRefs.current[id]);
   };
 
-  const handleNextMedia = (productId, product) => {
-    const totalMedia = (product.videos?.length || 0) + (product.images?.length || 0);
+  const handleNextMedia = (id, p) => {
+    const total = (p.videos?.length || 0) + (p.images?.length || 0);
     setCurrentMediaIndex(prev => {
-      const currentIndex = prev[productId] || 0;
-      const nextIndex = (currentIndex + 1) % totalMedia;
-      const mediaType = nextIndex < (product.videos?.length || 0) ? 'video' : 'image';
-      setCurrentMediaType(prevType => ({
-        ...prevType,
-        [productId]: mediaType
-      }));
-      return {
-        ...prev,
-        [productId]: nextIndex
-      };
+      const next = (prev[id] + 1) % total;
+      setCurrentMediaType(t => ({ ...t, [id]: next < (p.videos?.length || 0) ? 'video' : 'image' }));
+      return { ...prev, [id]: next };
     });
-    clearInterval(intervalRefs.current[productId]);
+    clearInterval(intervalRefs.current[id]);
   };
 
+  // === أنيميشن خفيفة ===
   const cardVariants = {
     hidden: { opacity: 0, y: 20, scale: 0.98 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.6,
-        ease: [0.4, 0, 0.2, 1],
-        type: 'spring',
-        stiffness: 100,
-        damping: 20,
-      },
-    },
-    hover: {
-      scale: 1.03,
-      boxShadow: '0 10px 20px rgba(0, 0, 0, 0.3)',
-      transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
-    },
-  };
-
-  const buttonVariants = {
-    hover: {
-      scale: 1.1,
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.2)',
-      backgroundColor: 'rgba(59, 130, 246, 0.8)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    tap: {
-      scale: 0.95,
-      transition: { duration: 0.1, ease: 'easeOut' },
-    },
-  };
-
-  const modalVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.3 } },
+    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+    hover: { scale: 1.03, boxShadow: '0 10px 20px rgba(0, 0, 0, 0.15)' }
   };
 
   return (
-    <motion.div
-      className="min-h-screen flex flex-col items-center bg-gradient-to-b from-gray-900 to-gray-800 p-4 sm:p-6 text-white"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      style={{ willChange: 'opacity' }}
-    >
-      <div className="flex flex-col sm:flex-row justify-between items-center w-full max-w-7xl mb-6 gap-4">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-          👨‍💼 لوحة تحكم الأدمن
-        </h1>
-        <motion.select
-          value={filterType}
-          onChange={e => setFilterType(e.target.value)}
-          className="p-2 rounded-xl bg-[#2A2A3E] text-white text-sm border border-gray-200/30 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          whileHover={{ scale: 1.02 }}
-          whileFocus={{ scale: 1.02 }}
-        >
-          <option value="">الكل</option>
-          <option value="رجالي">رجالي</option>
-          <option value="حريمي">حريمي</option>
-          <option value="أطفال">أطفال</option>
-        </motion.select>
+    <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
+      {/* خلفية ناعمة */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700"></div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full max-w-7xl">
-        {filteredProducts.length === 0 ? (
-          <p className="text-gray-400 text-xl col-span-full text-center">لا توجد منتجات متاحة أو جاري التحميل...</p>
-        ) : (
-          filteredProducts.map(product => (
-            <motion.div
-              key={product._id}
-              className="bg-[#1F1F2E] rounded-2xl shadow-xl overflow-hidden border border-gray-600/50 transition-all duration-300 flex flex-col"
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-              whileHover="hover"
+
+      <div className="relative z-10 w-full max-w-7xl mx-auto">
+
+        {/* === العنوان + الفلتر === */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
+              لوحة تحكم الأدمن
+            </h1>
+            <p className="text-red-300 mt-2">مراجعة وموافقة المنتجات</p>
+          </motion.div>
+
+          <select
+            value={filterType}
+            onChange={e => setFilterType(e.target.value)}
+            className="p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition"
+          >
+            <option value="">الكل</option>
+            <option value="رجالي">رجالي</option>
+            <option value="حريمي">حريمي</option>
+            <option value="أطفال">أطفال</option>
+          </select>
+        </div>
+
+        {/* === رسالة الخطأ === */}
+        <AnimatePresence>
+          {error && (
+            <motion.p
+              className="text-center text-red-400 mb-6"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
             >
-              <div className="relative w-full aspect-[4/3] bg-gray-800">
-                {(product.videos && product.videos.length > 0 && currentMediaType[product._id] === 'video') ? (
-                  <>
+              {error}
+            </motion.p>
+          )}
+        </AnimatePresence>
+
+        {/* === الكروت === */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredProducts.length === 0 ? (
+            <motion.p
+              className="col-span-full text-center text-slate-400 text-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              لا توجد منتجات للمراجعة
+            </motion.p>
+          ) : (
+            filteredProducts.map((product, i) => (
+              <motion.div
+                key={product._id}
+                className="bg-[#242526]/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden"
+                variants={cardVariants}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                whileHover="hover"
+                custom={i}
+              >
+                {/* === الوسائط === */}
+                <div className="relative aspect-[4/3] bg-[#3a3b3c]">
+                  {currentMediaType[product._id] === 'video' && product.videos?.length > 0 ? (
                     <video
-                      src={`${process.env.REACT_APP_API_URL}/uploads/${product.videos[currentMediaIndex[product._id] || 0]}`}
+                      src={`${process.env.REACT_APP_API_URL}/uploads/${product.videos[currentMediaIndex[product._id]]}`}
+                      className="w-full h-full object-contain"
                       controls
-                      className="w-full h-full object-contain rounded-t-xl transition-transform duration-300"
-                      onClick={() => openMedia(product.videos[currentMediaIndex[product._id] || 0], 'video')}
-                      onError={(e) => {
-                        console.error('خطأ في تحميل الفيديو:', e);
-                        e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-video.mp4`;
-                      }}
+                      onClick={() => openMedia(product.videos[currentMediaIndex[product._id]], 'video')}
                     />
-                    {(product.videos.length + (product.images?.length || 0)) > 1 && (
-                      <div className="absolute inset-x-0 bottom-2 flex justify-between px-4">
-                        <motion.button
-                          className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
-                          onClick={() => handlePrevMedia(product._id, product)}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          ←
-                        </motion.button>
-                        <motion.button
-                          className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
-                          onClick={() => handleNextMedia(product._id, product)}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          →
-                        </motion.button>
-                      </div>
-                    )}
-                  </>
-                ) : (product.images && product.images.length > 0) ? (
-                  <>
+                  ) : product.images?.length > 0 ? (
                     <img
                       src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[(currentMediaIndex[product._id] || 0) - (product.videos?.length || 0)]}`}
-                      alt={`${product.name}`}
-                      className="w-full h-full object-contain rounded-t-xl transition-transform duration-300"
-                      onClick={() => openMedia(product.images[(currentMediaIndex[product._id] || 0) - (product.videos?.length || 0)], 'image')}
-                      onError={(e) => {
-                        console.error('خطأ في تحميل الصورة:', e);
-                        e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                      }}
-                    />
-                    {(product.videos.length + (product.images?.length || 0)) > 1 && (
-                      <div className="absolute inset-x-0 bottom-2 flex justify-between px-4">
-                        <motion.button
-                          className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
-                          onClick={() => handlePrevMedia(product._id, product)}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          ←
-                        </motion.button>
-                        <motion.button
-                          className="bg-gray-900/70 text-white p-2 rounded-full shadow-md hover:bg-gray-900/90"
-                          onClick={() => handleNextMedia(product._id, product)}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          →
-                        </motion.button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-full bg-gray-700 flex items-center justify-center rounded-t-xl">
-                    <img
-                      src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`}
-                      alt="صورة بديلة"
+                      alt={product.name}
                       className="w-full h-full object-contain"
-                      onError={(e) => console.error('خطأ في تحميل الصورة البديلة:', e)}
+                      onClick={() => openMedia(product.images[(currentMediaIndex[product._id] || 0) - (product.videos?.length || 0)], 'image')}
+                      onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; }}
                     />
-                  </div>
-                )}
-              </div>
-              <div className="p-4 sm:p-6 flex flex-col flex-grow">
-                <h2 className="text-xl sm:text-2xl font-semibold mb-3 text-right bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-                  {product.name}
-                </h2>
-                {(product.videos?.length > 0 || product.images?.length > 0) && (
-                  <div className="flex flex-wrap gap-2 mb-3 justify-end">
-                    {product.videos?.map((vid, idx) => (
-                      <video
-                        key={`vid-${idx}`}
-                        src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`}
-                        controls
-                        className="w-20 h-20 object-cover rounded-lg cursor-pointer shadow-sm"
-                        onClick={() => openMedia(vid, 'video')}
-                        onError={(e) => console.error('خطأ في تحميل الفيديو:', e)}
-                      />
-                    ))}
+                  ) : (
+                    <img src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`} alt="بديل" className="w-full h-full object-contain" />
+                  )}
+
+                  {/* أزرار التنقل */}
+                  {(product.videos?.length + product.images?.length) > 1 && (
+                    <div className="absolute inset-x-0 bottom-3 flex justify-center gap-3">
+                      <button onClick={() => handlePrevMedia(product._id, product)} className="bg-black/50 text-white p-2 rounded-full hover:bg-black/70">←</button>
+                      <button onClick={() => handleNextMedia(product._id, product)} className="bg-black/50 text-white p-2 rounded-full hover:bg-black/70">→</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* === المعلومات === */}
+                <div className="p-5 space-y-2 text-right">
+                  <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
+                    {product.name}
+                  </h3>
+                  <p className="text-sm text-gray-300">التاجر: {product.vendor?.name || 'غير معروف'}</p>
+                  <p className="text-sm text-gray-300">النوع: {product.type}</p>
+                  <p className="text-sm text-gray-300">سعر الكرتونة: {product.price} جنيه</p>
+                  <p className="text-sm text-gray-300">سعر الجوز: {(product.price / product.quantityPerCarton).toFixed(2)} جنيه</p>
+                  <p className="text-sm text-gray-300">الكمية: {product.quantityPerCarton} جوز</p>
+                  <p className="text-sm text-gray-300">المصنع: {product.manufacturer}</p>
+
+                  {/* معاينة الوسائط */}
+                  <div className="flex flex-wrap gap-2 mt-3 justify-end">
                     {product.images?.map((img, idx) => (
                       <img
-                        key={`img-${idx}`}
+                        key={idx}
                         src={`${process.env.REACT_APP_API_URL}/uploads/${img}`}
-                        alt={`صورة ${idx + 1}`}
-                        className="w-20 h-20 object-cover rounded-lg cursor-pointer shadow-sm"
+                        alt=""
+                        className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-red-500"
                         onClick={() => {
-                          setCurrentMediaIndex(prev => ({
-                            ...prev,
-                            [product._id]: idx + (product.videos?.length || 0)
-                          }));
-                          setCurrentMediaType(prev => ({
-                            ...prev,
-                            [product._id]: 'image'
-                          }));
+                          setCurrentMediaIndex(prev => ({ ...prev, [product._id]: idx + (product.videos?.length || 0) }));
+                          setCurrentMediaType(prev => ({ ...prev, [product._id]: 'image' }));
                           openMedia(img, 'image');
                         }}
-                        onError={(e) => {
-                          console.error('خطأ في تحميل الصورة:', e);
-                          e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                        }}
+                        onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; }}
+                      />
+                    ))}
+                    {product.videos?.map((vid, idx) => (
+                      <video
+                        key={idx}
+                        src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`}
+                        className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-red-500"
+                        onClick={() => openMedia(vid, 'video')}
                       />
                     ))}
                   </div>
-                )}
-                <div className="space-y-2 text-right text-gray-300 text-sm sm:text-base flex-grow">
-                  <p>👤 التاجر: {product.vendor?.name || 'غير معروف'}</p>
-                  <p>📦 النوع: {product.type}</p>
-                  <p>💰 سعر الكرتونة: {product.price} جنيه</p>
-                  <p>💸 سعر الجوز: {(product.price / product.quantityPerCarton).toFixed(2)} جنيه</p>
-                  <p>📦 الكرتونة: {product.quantityPerCarton} جوز</p>
-                  <p>🏭 المصنع: {product.manufacturer}</p>
-                  <p className="text-gray-400 line-clamp-2">{product.description}</p>
-                  <p
-                    className={`mb-4 px-3 py-2 rounded-full text-sm font-medium text-center ${
-                      product.approved
-                        ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                        : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                    }`}
-                  >
-                    📋 الحالة: {product.approved ? '✅ موافق عليه' : '⏳ في انتظار الموافقة'}
-                  </p>
+
+                  {/* حالة الموافقة */}
+                  <div className={`mt-4 p-3 rounded-xl text-center font-medium text-sm ${product.approved ? 'bg-green-600/20 text-green-300' : 'bg-yellow-600/20 text-yellow-300'}`}>
+                    {product.approved ? 'موافق عليه' : 'في انتظار الموافقة'}
+                  </div>
+
+                  {/* زر الموافقة */}
+                  {!product.approved && (
+                    <motion.button
+                      onClick={() => handleApprove(product._id)}
+                      className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white font-bold shadow-md hover:from-green-700 hover:to-green-800"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      الموافقة
+                    </motion.button>
+                  )}
                 </div>
-                {!product.approved && (
-                  <motion.button
-                    onClick={() => handleApprove(product._id)}
-                    className="w-full mt-4 py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300"
-                    variants={buttonVariants}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    ✅ الموافقة
-                  </motion.button>
-                )}
-              </div>
-            </motion.div>
-          ))
-        )}
+              </motion.div>
+            ))
+          )}
+        </div>
       </div>
-      {/* Modal لفتح الصورة/الفيديو */}
+
+      {/* === مودال الوسائط === */}
       <AnimatePresence>
         {selectedMedia && (
-          <motion.div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            variants={modalVariants}
-            onClick={closeMedia}
-          >
-            <motion.div className="relative" onClick={(e) => e.stopPropagation()}>
+          <motion.div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeMedia}>
+            <motion.div className="relative max-w-4xl max-h-screen" onClick={e => e.stopPropagation()}>
               {selectedMedia.type === 'image' ? (
-                <img
-                  src={selectedMedia.url}
-                  className="max-w-full max-h-screen rounded-xl shadow-lg"
-                  alt="صورة كاملة"
-                  onError={(e) => {
-                    console.error('خطأ في تحميل الصورة في المودال:', e);
-                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                  }}
-                />
+                <img src={selectedMedia.url} alt="" className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               ) : (
-                <video
-                  src={selectedMedia.url}
-                  className="max-w-full max-h-screen rounded-xl shadow-lg"
-                  controls
-                  autoPlay
-                  onError={(e) => console.error('خطأ في تحميل الفيديو في المودال:', e)}
-                />
+                <video src={selectedMedia.url} controls autoPlay className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               )}
-              <motion.button
-                onClick={closeMedia}
-                className="absolute top-2 right-2 text-red-500 text-2xl bg-gray-900/70 rounded-full p-2 hover:bg-gray-900/90 hover:text-red-400"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                ×
-              </motion.button>
+              <button onClick={closeMedia} className="absolute top-4 right-4 bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-lg hover:bg-red-700">×</button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 };
 

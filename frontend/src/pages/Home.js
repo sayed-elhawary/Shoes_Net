@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 const Home = () => {
   const [products, setProducts] = useState([]);
@@ -22,18 +23,298 @@ const Home = () => {
   const intervalRefs = useRef({});
   const navigate = useNavigate();
 
+  // إضافات جديدة للرسائل
+  const [orders, setOrders] = useState([]);
+  const [selectedOrderForMessages, setSelectedOrderForMessages] = useState(null);
+  const [newMessage, setNewMessage] = useState('');
+  const [newImage, setNewImage] = useState(null);
+  const [newImagePreview, setNewImagePreview] = useState(null);
+  const [showUnreadList, setShowUnreadList] = useState(false);
+  const socketRef = useRef(null);
+  const currentOrderIdRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  // Image preview effect
+  useEffect(() => {
+    if (newImage) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewImagePreview(reader.result);
+      };
+      reader.readAsDataURL(newImage);
+    } else {
+      setNewImagePreview(null);
+    }
+  }, [newImage]);
+
+  // دالة التمرير إلى الأسفل (تُستدعى فقط عند إرسال رسالة)
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Socket authentication & connection management
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('يرجى تسجيل الدخول');
+      navigate('/login');
+      return;
+    }
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      socketRef.current = io(process.env.REACT_APP_API_URL, { autoConnect: false });
+      const socket = socketRef.current;
+      socket.connect();
+      socket.emit('authenticate', { userId: payload.id, role: payload.role });
+      socket.on('connect', () => {
+        console.log('Socket connected successfully');
+        if (currentOrderIdRef.current) {
+          socket.emit('joinOrder', currentOrderIdRef.current);
+        }
+      });
+      socket.on('error', (err) => {
+        console.error('Socket.IO error:', err);
+        setError(`خطأ في الاتصال: ${err.message || 'غير معروف'}`);
+      });
+      socket.on('orderJoined', ({ orderId }) => {
+        console.log(`Successfully joined order room: ${orderId}`);
+      });
+      socket.on('disconnect', () => {
+        console.log('Socket disconnected');
+      });
+      return () => {
+        if (socket.connected) {
+          socket.disconnect();
+        }
+      };
+    } catch (e) {
+      console.error('Token decode error:', e);
+      setError('خطأ في التوثيق، يرجى تسجيل الدخول مرة أخرى');
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('userId');
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  // Fetch unread messages/orders
+  const fetchUnreadOrders = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('يرجى تسجيل الدخول لجلب الطلبات');
+      navigate('/login');
+      return;
+    }
+    axios
+      .get(`${process.env.REACT_APP_API_URL}/api/orders?unreadOnly=true`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then(res => {
+        setOrders(res.data.orders || []);
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Fetch orders error:', err);
+        const errorMessage = err.response?.data?.message || 'خطأ في جلب الطلبات: ' + err.message;
+        setError(errorMessage);
+        if (err.response?.status === 401) {
+          setError('غير مصرح: يرجى تسجيل الدخول مرة أخرى');
+          localStorage.removeItem('token');
+          localStorage.removeItem('role');
+          localStorage.removeItem('userId');
+          navigate('/login');
+        }
+      });
+  };
+
+  // Trigger fetch on mount
+  useEffect(() => {
+    fetchUnreadOrders();
+  }, []);
+
+  // Messages modal socket handling
+  useEffect(() => {
+    if (!selectedOrderForMessages || !socketRef.current) {
+      if (currentOrderIdRef.current && socketRef.current) {
+        socketRef.current.emit('leaveOrder', currentOrderIdRef.current);
+        currentOrderIdRef.current = null;
+      }
+      return;
+    }
+
+    const orderId = selectedOrderForMessages._id;
+    currentOrderIdRef.current = orderId;
+    socketRef.current.emit('joinOrder', orderId);
+
+    const token = localStorage.getItem('token');
+    axios
+      .post(
+        `${process.env.REACT_APP_API_URL}/api/orders/${orderId}/markRead`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      .then(res => {
+        setOrders(prevOrders =>
+          prevOrders.map(o => (o._id === orderId ? { ...o, unreadCount: 0 } : o))
+        );
+        setSelectedOrderForMessages(prev => ({
+          ...prev,
+          messages: res.data.order.messages || [],
+          unreadCount: 0,
+        }));
+        // لا يوجد scrollToBottom هنا — لا تمرير تلقائي عند فتح المحادثة
+      })
+      .catch(err => {
+        console.error('Mark read error:', err);
+        setError('خطأ في تحديث حالة القراءة');
+      });
+
+    const handleNewMessage = (message) => {
+      if (message.orderId !== orderId) return;
+      setSelectedOrderForMessages(prev => {
+        const exists = prev.messages?.some(m => m._id === message._id);
+        if (exists) return prev;
+        return {
+          ...prev,
+          messages: [...(prev.messages || []), message],
+        };
+      });
+      if (message.from !== getUserRole()) {
+        setOrders(prevOrders =>
+          prevOrders.map(o =>
+            o._id === orderId
+              ? { ...o, unreadCount: (o.unreadCount || 0) + 1 }
+              : o
+          )
+        );
+      }
+      // لا يوجد scrollToBottom هنا — لا تمرير تلقائي عند استقبال رسالة
+    };
+
+    const handleMessagesUpdated = (data) => {
+      if (data.orderId !== orderId) return;
+      setSelectedOrderForMessages(prev => ({
+        ...prev,
+        messages: data.messages || [],
+        unreadCount: data.messages.filter(msg => !msg.isRead && msg.from !== getUserRole()).length,
+      }));
+      // لا يوجد scrollToBottom هنا
+    };
+
+    const handleUnreadUpdate = ({ orderId: updatedId, unreadCount }) => {
+      setOrders(prev =>
+        prev.map(o => (o._id === updatedId ? { ...o, unreadCount } : o))
+      );
+      if (updatedId === orderId) {
+        setSelectedOrderForMessages(prev => ({ ...prev, unreadCount }));
+      }
+    };
+
+    const socket = socketRef.current;
+    socket.on('newMessage', handleNewMessage);
+    socket.on('messagesUpdated', handleMessagesUpdated);
+    socket.on('unreadUpdate', handleUnreadUpdate);
+
+    return () => {
+      socket.off('newMessage', handleNewMessage);
+      socket.off('messagesUpdated', handleMessagesUpdated);
+      socket.off('unreadUpdate', handleUnreadUpdate);
+      socket.emit('leaveOrder', orderId);
+      currentOrderIdRef.current = null;
+    };
+  }, [selectedOrderForMessages]);
+
+  // Send message handler — التمرير يحدث هنا فقط
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('يرجى تسجيل الدخول');
+      navigate('/login');
+      return;
+    }
+    if (!newMessage.trim() && !newImage) {
+      setError('يجب إدخال رسالة أو رفع صورة');
+      return;
+    }
+    const formData = new FormData();
+    if (newMessage.trim()) formData.append('text', newMessage.trim());
+    if (newImage) formData.append('image', newImage);
+
+    try {
+      const res = await axios.post(
+        `${process.env.REACT_APP_API_URL}/api/orders/${selectedOrderForMessages._id}/message`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      setSelectedOrderForMessages(prev => ({
+        ...prev,
+        messages: res.data.order.messages || [],
+      }));
+      setNewMessage('');
+      setNewImage(null);
+      setNewImagePreview(null);
+      setError(null);
+      // التمرير يحدث فقط عند إرسال الرسالة من المستخدم
+      scrollToBottom();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'خطأ في إرسال الرسالة';
+      setError(errorMessage);
+    }
+  };
+
+  // Messages modal open/close
+  const openMessages = (order) => {
+    setSelectedOrderForMessages(order);
+    setShowUnreadList(false);
+    // لا يوجد scrollToBottom هنا — لا تمرير تلقائي عند فتح المحادثة
+  };
+  const closeMessages = () => {
+    setSelectedOrderForMessages(null);
+    setNewMessage('');
+    setNewImage(null);
+    setNewImagePreview(null);
+  };
+
+  // User role getter
+  const getUserRole = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.role || 'user';
+      } catch (e) {
+        console.error('Error decoding token:', e);
+        setError('خطأ في فك تشفير التوكن، يرجى تسجيل الدخول مرة أخرى');
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        localStorage.removeItem('userId');
+        navigate('/login');
+        return 'user';
+      }
+    }
+    return 'user';
+  };
+  const userRole = getUserRole();
+
   // فحص التوكن ودور المستخدم
   useEffect(() => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
     const userId = localStorage.getItem('userId');
-
     if (!token || !['admin', 'vendor', 'customer'].includes(role)) {
       setError('غير مصرح: يرجى تسجيل الدخول كأدمن، تاجر، أو عميل');
       navigate('/login');
       return;
     }
-
     // جلب المنتجات
     axios
       .get(`${process.env.REACT_APP_API_URL}/api/products`, {
@@ -64,13 +345,11 @@ const Home = () => {
           navigate('/login');
         }
       });
-
     // جلب السلة (للعملاء)
     if (role === 'customer') {
       const savedCart = localStorage.getItem('cart');
       if (savedCart) setCart(JSON.parse(savedCart));
     }
-
     // جلب الطلبات السابقة
     if (role === 'customer' && userId) {
       axios
@@ -157,13 +436,11 @@ const Home = () => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
     if (!token || !userId) return navigate('/login');
-
     let confirmSubmit = true;
     if (previousOrders.length > 0) {
       confirmSubmit = window.confirm('أنت طلبت الطلب مرة، هل تريد تأكيد طلبه مرة أخرى؟');
     }
     if (!confirmSubmit) return;
-
     setIsSubmitting(true);
     const promises = cart.map(item =>
       axios.post(
@@ -179,7 +456,6 @@ const Home = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       )
     );
-
     Promise.all(promises)
       .then(() => {
         alert('تم إنشاء الطلبات بنجاح!');
@@ -203,7 +479,6 @@ const Home = () => {
   const openMedia = (media, type) => {
     setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
   };
-
   const closeMedia = () => setSelectedMedia(null);
 
   const handlePrevMedia = (id, p) => {
@@ -230,35 +505,23 @@ const Home = () => {
   const cardVariants = {
     hidden: { opacity: 0, y: 30, scale: 0.95 },
     visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
-    hover: { scale: 1.05, boxShadow: '0 20px 40px rgba(239, 68, 68, 0.3)', transition: { duration: 0.3 } }
+    hover: { scale: 1.03, boxShadow: '0 12px 24px rgba(0, 0, 0, 0.2)', transition: { duration: 0.2 } }
   };
-
   const buttonVariants = {
-    hover: { scale: 1.08, boxShadow: '0 8px 16px rgba(239, 68, 68, 0.4)' },
+    hover: { scale: 1.05, boxShadow: '0 8px 16px rgba(239, 68, 68, 0.3)' },
     tap: { scale: 0.95 }
   };
-
   const modalVariants = { hidden: { opacity: 0, scale: 0.85 }, visible: { opacity: 1, scale: 1 } };
-
   const toastVariants = { hidden: { opacity: 0, x: 50 }, visible: { opacity: 1, x: 0 } };
+  const listVariants = { hidden: { opacity: 0, y: -10 }, visible: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } };
 
   const role = localStorage.getItem('role');
   const isCustomer = role === 'customer';
+  const totalUnread = orders.reduce((acc, o) => acc + (o.unreadCount || 0), 0);
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center p-4 relative overflow-hidden"
-      style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      }}
-    >
-      {/* خلفية ناعمة */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700"></div>
-      </div>
-
-      <div className="relative z-10 w-full max-w-7xl">
+    <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
+      <div className="relative z-10 w-full max-w-7xl mx-auto">
         {/* === اللوجو + العنوان === */}
         <motion.div
           className="flex flex-col items-center mb-8"
@@ -272,7 +535,7 @@ const Home = () => {
           <p className="text-red-300 text-lg mt-1">المنتجات المتاحة</p>
         </motion.div>
 
-        {/* === الفلتر + السلة === */}
+        {/* === الفلتر + السلة + الرسائل === */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
           <motion.select
             value={filterType}
@@ -296,6 +559,44 @@ const Home = () => {
             >
               السلة ({cart.reduce((a, i) => a + i.quantity, 0)})
             </motion.button>
+          )}
+
+          {(userRole === 'customer' || userRole === 'vendor') && totalUnread > 0 && (
+            <div className="relative">
+              <motion.button
+                onClick={() => setShowUnreadList(prev => !prev)}
+                className="px-6 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-blue-600 to-blue-700 shadow-lg hover:from-blue-700 hover:to-blue-800 flex items-center gap-2"
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+              >
+                الرسائل غير المقروءة ({totalUnread})
+                <span className={`transition-transform duration-200 ${showUnreadList ? 'rotate-180' : ''}`}>Down Arrow</span>
+              </motion.button>
+              <AnimatePresence>
+                {showUnreadList && (
+                  <motion.div
+                    variants={listVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="absolute top-full mt-2 w-72 bg-[#242526] backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700 z-50 max-h-64 overflow-y-auto"
+                  >
+                    {orders.map(order => (
+                      <div
+                        key={order._id}
+                        onClick={() => openMessages(order)}
+                        className="p-4 border-b border-gray-700 hover:bg-gray-800/60 cursor-pointer transition-colors duration-200"
+                      >
+                        <p className="font-bold text-red-400">طلب #{order.orderNumber}</p>
+                        <p className="text-sm text-gray-300">المنتج: {order.product?.name}</p>
+                        <p className="text-xs text-red-400 mt-1">غير مقروء: {order.unreadCount}</p>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
 
@@ -334,16 +635,14 @@ const Home = () => {
                       <span className="text-slate-500">بدون صورة</span>
                     </div>
                   )}
-
                   {/* أزرار التنقل */}
                   {(product.videos?.length || 0) + (product.images?.length || 0) > 1 && (
                     <div className="absolute inset-x-0 bottom-3 flex justify-center gap-3">
-                      <button onClick={() => handlePrevMedia(product._id, product)} className="bg-black/50 text-white p-2 rounded-full backdrop-blur-sm">←</button>
-                      <button onClick={() => handleNextMedia(product._id, product)} className="bg-black/50 text-white p-2 rounded-full backdrop-blur-sm">→</button>
+                      <button onClick={() => handlePrevMedia(product._id, product)} className="bg-black/50 text-white p-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition">Left Arrow</button>
+                      <button onClick={() => handleNextMedia(product._id, product)} className="bg-black/50 text-white p-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition">Right Arrow</button>
                     </div>
                   )}
                 </div>
-
                 <div className="p-5 space-y-2 text-right">
                   <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
                     {product.name}
@@ -356,7 +655,6 @@ const Home = () => {
                     <p>الكرتونة: {product.quantityPerCarton} جوز</p>
                     <p>المصنع: {product.manufacturer}</p>
                   </div>
-
                   {isCustomer && (
                     <motion.button
                       onClick={() => addToCart(product)}
@@ -391,7 +689,7 @@ const Home = () => {
       </AnimatePresence>
 
       {/* === مودال السلة + الطلب + الصورة === */}
-      {/* (نفس الكود مع تغيير الألوان فقط) */}
+      {/* Cart Modal */}
       <AnimatePresence>
         {showCartModal && isCustomer && (
           <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={() => setShowCartModal(false)}>
@@ -425,7 +723,7 @@ const Home = () => {
         )}
       </AnimatePresence>
 
-      {/* مودال الطلب */}
+      {/* Order Modal */}
       <AnimatePresence>
         {showOrderForm && isCustomer && (
           <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={() => setShowOrderForm(false)}>
@@ -443,7 +741,7 @@ const Home = () => {
         )}
       </AnimatePresence>
 
-      {/* مودال الصورة */}
+      {/* Media Modal */}
       <AnimatePresence>
         {selectedMedia && (
           <motion.div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={closeMedia}>
@@ -454,6 +752,135 @@ const Home = () => {
                 <video src={selectedMedia.url} controls autoPlay className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               )}
               <button onClick={closeMedia} className="absolute top-4 right-4 bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-lg hover:bg-red-700">×</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Messages Modal */}
+      <AnimatePresence>
+        {selectedOrderForMessages && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            variants={modalVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={closeMessages}
+          >
+            <motion.div
+              className="bg-[#242526] p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-3xl font-bold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-red-700">
+                الرسائل للطلب #{selectedOrderForMessages.orderNumber}
+              </h2>
+              <div className="flex-1 overflow-y-auto mb-6 bg-[#3a3b3c] p-4 rounded-2xl shadow-inner">
+                {selectedOrderForMessages.messages && selectedOrderForMessages.messages.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedOrderForMessages.messages.map((msg, index) => {
+                      const isMyMessage = msg.from === userRole;
+                      const senderName = msg.from === 'vendor' ? selectedOrderForMessages.product?.vendor?.name : selectedOrderForMessages.user?.name || 'غير معروف';
+                      return (
+                        <div
+                          key={msg._id || index}
+                          className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-xs sm:max-w-sm p-4 rounded-2xl shadow-md ${
+                              isMyMessage ? 'bg-gradient-to-r from-red-600 to-red-800 text-white' : 'bg-gray-700 text-white'
+                            }`}
+                          >
+                            <p className="font-bold text-sm opacity-90">
+                              {msg.from === 'vendor' ? 'التاجر' : 'العميل'}: {senderName}
+                            </p>
+                            {msg.text && <p className="mt-2 text-lg">{msg.text}</p>}
+                            {msg.image && (
+                              <img
+                                src={`${process.env.REACT_APP_API_URL}/Uploads/${msg.image}`}
+                                alt="صورة الرسالة"
+                                className="mt-3 w-full max-w-48 object-cover rounded-xl cursor-pointer shadow-lg hover:shadow-xl transition"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openMedia(msg.image, 'image');
+                                }}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`;
+                                }}
+                              />
+                            )}
+                            <div className="flex items-center justify-between mt-3 text-xs opacity-70">
+                              <p>{new Date(msg.timestamp).toLocaleString('ar-EG')}</p>
+                              {isMyMessage && (
+                                <span>
+                                  {msg.isRead ? 'Seen' : msg.isDelivered ? 'Delivered' : 'Sent'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-400 text-lg">لا توجد رسائل بعد.</p>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {(userRole === 'vendor' || userRole === 'customer') && (
+                <form onSubmit={handleSendMessage} className="space-y-4">
+                  <textarea
+                    placeholder="اكتب رسالتك هنا..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right resize-none"
+                    rows="4"
+                  />
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setNewImage(e.target.files[0] || null)}
+                      className="text-sm text-gray-300 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-red-600 file:text-white hover:file:bg-red-700"
+                    />
+                    {newImagePreview && (
+                      <div className="relative">
+                        <img src={newImagePreview} alt="معاينة" className="w-24 h-24 object-cover rounded-xl shadow-lg" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewImage(null);
+                            setNewImagePreview(null);
+                          }}
+                          className="absolute top-0 right-0 bg-red-800 text-white rounded-full w-8 h-8 flex items-center justify-center text-xl"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <motion.button
+                    type="submit"
+                    className="w-full py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg"
+                    variants={buttonVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    إرسال الرسالة
+                  </motion.button>
+                </form>
+              )}
+              <motion.button
+                onClick={closeMessages}
+                className="w-full mt-4 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-gray-700 to-gray-900 shadow-xl text-lg"
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+              >
+                إغلاق
+              </motion.button>
             </motion.div>
           </motion.div>
         )}

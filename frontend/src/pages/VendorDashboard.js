@@ -1,3 +1,4 @@
+// frontend/src/pages/VendorDashboard.js
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -17,10 +18,16 @@ const VendorDashboard = () => {
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
+  const [error, setError] = useState('');
 
+  // جلب المنتجات
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
+    if (!token || !userId) {
+      setError('يرجى تسجيل الدخول');
+      return;
+    }
     axios.get(`${process.env.REACT_APP_API_URL}/api/products/my-products`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -31,49 +38,54 @@ const VendorDashboard = () => {
           }
           return false;
         }));
+        setError('');
       })
-      .catch(err => console.error('خطأ في جلب المنتجات:', err));
+      .catch(err => {
+        console.error('خطأ في جلب المنتجات:', err);
+        setError('فشل جلب المنتجات');
+      });
   }, []);
 
+  // إضافة أو تعديل منتج
   const handleAddOrUpdateProduct = () => {
-    // Validate required fields
     if (!form.name || !form.type || !form.price || !form.quantityPerCarton || !form.manufacturer) {
-      alert('يرجى ملء جميع الحقول المطلوبة');
+      setError('يرجى ملء جميع الحقول المطلوبة');
       return;
     }
-    // Validate that at least one image is uploaded if videos are present
     if (videos.length > 0 && images.length === 0) {
-      alert('يجب رفع صورة واحدة على الأقل عند رفع فيديو');
+      setError('يجب رفع صورة واحدة على الأقل عند رفع فيديو');
       return;
     }
+
     const formData = new FormData();
     Object.keys(form).forEach(key => formData.append(key, form[key]));
-    if (!isEditing) {
-      formData.append('vendor', localStorage.getItem('userId'));
-    }
-    images.forEach(image => formData.append('images', image));
-    videos.forEach(video => formData.append('videos', video));
+    if (!isEditing) formData.append('vendor', localStorage.getItem('userId'));
+    images.forEach(img => formData.append('images', img));
+    videos.forEach(vid => formData.append('videos', vid));
+
     const token = localStorage.getItem('token');
     const url = isEditing
       ? `${process.env.REACT_APP_API_URL}/api/products/${editingProductId}`
       : `${process.env.REACT_APP_API_URL}/api/products`;
     const method = isEditing ? 'put' : 'post';
+
     axios[method](url, formData, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
     })
       .then(res => {
         if (isEditing) {
-          setProducts(products.map(p => p._id === editingProductId ? res.data : p));
+          setProducts(prev => prev.map(p => p._id === editingProductId ? res.data : p));
           alert('تم تعديل المنتج بنجاح');
         } else {
-          setProducts([...products, res.data]);
+          setProducts(prev => [...prev, res.data]);
           alert('تم إضافة المنتج بنجاح');
         }
         resetForm();
+        setError('');
       })
       .catch(err => {
-        const errorMessage = err.response?.data?.message || `خطأ في ${isEditing ? 'تعديل' : 'إضافة'} المنتج: ${err.message}`;
-        alert(errorMessage);
+        const msg = err.response?.data?.message || `خطأ في ${isEditing ? 'تعديل' : 'إضافة'} المنتج`;
+        setError(msg);
       });
   };
 
@@ -83,6 +95,7 @@ const VendorDashboard = () => {
     setVideos([]);
     setIsEditing(false);
     setEditingProductId(null);
+    setError('');
   };
 
   const handleEdit = (product) => {
@@ -98,14 +111,15 @@ const VendorDashboard = () => {
     setVideos([]);
     setIsEditing(true);
     setEditingProductId(product._id);
+    setError('');
   };
 
   const handleImageChange = (e) => {
     const files = [...e.target.files];
-    const maxSize = 50 * 1024 * 1024; // 50 ميجابايت
-    const validFiles = files.filter(file => {
-      if (file.size > maxSize) {
-        alert(`الملف ${file.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`);
+    const maxSize = 50 * 1024 * 1024;
+    const validFiles = files.filter(f => {
+      if (f.size > maxSize) {
+        alert(`الملف ${f.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`);
         return false;
       }
       return true;
@@ -115,10 +129,10 @@ const VendorDashboard = () => {
 
   const handleVideoChange = (e) => {
     const files = [...e.target.files];
-    const maxSize = 50 * 1024 * 1024; // 50 ميجابايت
-    const validFiles = files.filter(file => {
-      if (file.size > maxSize) {
-        alert(`الملف ${file.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`);
+    const maxSize = 50 * 1024 * 1024;
+    const validFiles = files.filter(f => {
+      if (f.size > maxSize) {
+        alert(`الملف ${f.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`);
         return false;
       }
       return true;
@@ -127,329 +141,271 @@ const VendorDashboard = () => {
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('هل تريد حذف هذا المنتج؟')) {
-      const token = localStorage.getItem('token');
-      axios.delete(`${process.env.REACT_APP_API_URL}/api/products/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+    if (!window.confirm('هل تريد حذف هذا المنتج؟')) return;
+    const token = localStorage.getItem('token');
+    axios.delete(`${process.env.REACT_APP_API_URL}/api/products/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(() => {
+        setProducts(prev => prev.filter(p => p._id !== id));
+        alert('تم حذف المنتج بنجاح');
       })
-        .then(() => {
-          setProducts(products.filter(p => p._id !== id));
-          alert('تم حذف المنتج بنجاح');
-        })
-        .catch(err => alert('خطأ في حذف المنتج: ' + err.message));
-    }
+      .catch(err => setError('خطأ في حذف المنتج: ' + err.message));
   };
 
-  const openMedia = (media, type) => {
-    setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
-  };
-
+  const openMedia = (media, type) => setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
   const closeMedia = () => setSelectedMedia(null);
 
-  const formVariants = {
-    hidden: { opacity: 0, y: 20, scale: 0.98 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.6,
-        ease: [0.4, 0, 0.2, 1],
-        type: 'spring',
-        stiffness: 100,
-        damping: 20,
-      },
-    },
-  };
-
-  const inputVariants = {
-    hover: {
-      scale: 1.02,
-      borderColor: 'rgba(59, 130, 246, 0.5)',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    focus: {
-      scale: 1.02,
-      borderColor: 'rgba(59, 130, 246, 0.5)',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-  };
-
-  const buttonVariants = {
-    hover: {
-      scale: 1.05,
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
-      backgroundColor: 'rgba(34, 197, 94, 0.7)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    tap: {
-      scale: 0.98,
-      transition: { duration: 0.1, ease: 'easeOut' },
-    },
-  };
-
+  // أنيميشن خفيفة
   const cardVariants = {
     hidden: { opacity: 0, y: 20, scale: 0.98 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.6,
-        ease: [0.4, 0, 0.2, 1],
-        type: 'spring',
-        stiffness: 100,
-        damping: 20,
-      },
-    },
-    hover: {
-      scale: 1.03,
-      boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-  };
-
-  const deleteButtonVariants = {
-    hover: {
-      scale: 1.05,
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
-      backgroundColor: 'rgba(220, 38, 38, 0.7)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    tap: {
-      scale: 0.98,
-      transition: { duration: 0.1, ease: 'easeOut' },
-    },
-  };
-
-  const editButtonVariants = {
-    hover: {
-      scale: 1.05,
-      boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
-      backgroundColor: 'rgba(59, 130, 246, 0.7)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    tap: {
-      scale: 0.98,
-      transition: { duration: 0.1, ease: 'easeOut' },
-    },
-  };
-
-  const modalVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.3 } },
+    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+    hover: { scale: 1.03, boxShadow: '0 10px 20px rgba(0, 0, 0, 0.15)', transition: { duration: 0.2 } }
   };
 
   return (
-    <motion.div
-      className="min-h-screen flex flex-col items-center bg-gradient-to-b from-gray-900 to-gray-800 p-4 text-white"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      style={{ willChange: 'opacity' }}
-    >
-      <h1 className="text-2xl md:text-3xl font-bold mb-8 text-center">🏪 لوحة تحكم التاجر</h1>
-      <motion.div
-        className="bg-[#1F1F2E] p-6 rounded-2xl shadow-2xl mb-8 border border-gray-700 w-full max-w-4xl"
-        variants={formVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {['name', 'price', 'quantityPerCarton', 'manufacturer', 'description'].map(field => (
-            <motion.input
-              key={field}
-              type={field === 'price' || field === 'quantityPerCarton' ? 'number' : 'text'}
-              placeholder={
-                field === 'name' ? 'اسم المنتج' :
-                field === 'price' ? 'سعر الكرتونة' :
-                field === 'quantityPerCarton' ? 'الكرتونة (جوز)' :
-                field === 'manufacturer' ? 'المصنع' :
-                'الوصف'
-              }
-              value={form[field]}
-              onChange={e => setForm({ ...form, [field]: e.target.value })}
-              className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
-              variants={inputVariants}
-              whileHover="hover"
-              whileFocus="focus"
-            />
-          ))}
-          <motion.select
-            value={form.type}
-            onChange={e => setForm({ ...form, type: e.target.value })}
-            className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right"
-            variants={inputVariants}
-            whileHover="hover"
-            whileFocus="focus"
-          >
-            <option value="" disabled>اختر النوع</option>
-            <option value="رجالي">رجالي</option>
-            <option value="حريمي">حريمي</option>
-            <option value="أطفال">أطفال</option>
-          </motion.select>
-          <motion.input
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={handleImageChange}
-            className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
-            variants={inputVariants}
-            whileHover="hover"
-            whileFocus="focus"
-          />
-          <motion.input
-            type="file"
-            multiple
-            accept="video/*"
-            onChange={handleVideoChange}
-            className="w-full p-3 border border-gray-200/30 rounded-xl focus:outline-none transition-all duration-300 bg-[#2A2A3E] text-white text-sm shadow-sm text-right placeholder-gray-400"
-            variants={inputVariants}
-            whileHover="hover"
-            whileFocus="focus"
-          />
-        </div>
-        <motion.button
-          onClick={handleAddOrUpdateProduct}
-          className="mt-4 w-full p-3 rounded-xl text-white font-semibold"
-          style={{ backgroundColor: 'rgba(34, 197, 94, 0.5)' }}
-          variants={buttonVariants}
-          whileHover="hover"
-          whileTap="tap"
-        >
-          {isEditing ? '✏️ تعديل منتج' : '➕ إضافة منتج'}
-        </motion.button>
-      </motion.div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl">
-        {products.map(product => (
-          <motion.div
-            key={product._id}
-            className="bg-[#1F1F2E] rounded-2xl shadow-2xl p-4 border border-gray-700"
-            variants={cardVariants}
-            initial="hidden"
-            animate="visible"
-            whileHover="hover"
-          >
-            <h2 className="text-xl font-semibold mb-2 text-right">{product.name}</h2>
-            {product.images?.length > 0 ? (
-              <img
-                src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[0]}`}
-                className="w-full h-48 object-cover rounded-xl mb-2"
-                alt={product.name}
-                onError={(e) => {
-                  console.error('خطأ في تحميل الصورة الرئيسية:', e);
-                  e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                }}
-              />
-            ) : (
-              <img
-                src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`}
-                className="w-full h-48 object-cover rounded-xl mb-2"
-                alt="صورة بديلة"
-                onError={(e) => console.error('خطأ في تحميل الصورة البديلة:', e)}
-              />
-            )}
-            <p className="text-gray-300 text-right">📋 الحالة: {product.approved ? '✅ موافق' : '⏳ انتظار'}</p>
-            <p className="text-gray-300 text-right">💰 سعر الكرتونة: {product.price} جنيه</p>
-            <p className="text-gray-300 text-right">💸 سعر الجوز: {(product.price / product.quantityPerCarton).toFixed(2)} جنيه</p>
-            <p className="text-gray-300 text-right">📦 الكمية لكل كرتونة: {product.quantityPerCarton} جوز</p>
-            <p className="text-gray-300 text-right">🏭 المصنع: {product.manufacturer}</p>
-            <p className="text-gray-300 text-right">📝 الوصف: {product.description}</p>
-            <p className="text-gray-300 text-right">📦 النوع: {product.type}</p>
-            <div className="flex flex-wrap mt-2 space-x-2 space-x-reverse justify-end">
-              {product.images?.map((img, idx) => (
-                <img
-                  key={idx}
-                  src={`${process.env.REACT_APP_API_URL}/uploads/${img}`}
-                  className="w-16 h-16 object-cover rounded-xl cursor-pointer"
-                  alt={`صورة ${idx + 1}`}
-                  onClick={() => openMedia(img, 'image')}
-                  onError={(e) => {
-                    console.error('خطأ في تحميل الصورة:', e);
-                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                  }}
-                />
-              ))}
-              {product.videos?.map((vid, idx) => (
-                <video
-                  key={idx}
-                  src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`}
-                  className="w-16 h-16 object-cover rounded-xl cursor-pointer"
-                  onClick={() => openMedia(vid, 'video')}
-                  onError={(e) => console.error('خطأ في تحميل الفيديو:', e)}
-                />
-              ))}
-            </div>
-            <div className="flex justify-between mt-4">
-              <motion.button
-                onClick={() => handleEdit(product)}
-                className="w-1/2 mr-2 p-2 rounded-xl text-white font-semibold"
-                style={{ backgroundColor: 'rgba(59, 130, 246, 0.5)' }}
-                variants={editButtonVariants}
-                whileHover="hover"
-                whileTap="tap"
-              >
-                ✏️ تعديل
-              </motion.button>
-              <motion.button
-                onClick={() => handleDelete(product._id)}
-                className="w-1/2 p-2 rounded-xl text-white font-semibold"
-                style={{ backgroundColor: 'rgba(220, 38, 38, 0.5)' }}
-                variants={deleteButtonVariants}
-                whileHover="hover"
-                whileTap="tap"
-              >
-                🗑️ حذف
-              </motion.button>
-            </div>
-          </motion.div>
-        ))}
+    <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
+      {/* خلفية ناعمة */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700"></div>
       </div>
+
+      <div className="relative z-10 w-full max-w-7xl mx-auto">
+
+        {/* === العنوان === */}
+        <motion.div
+          className="text-center mb-10"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
+            لوحة تحكم التاجر
+          </h1>
+          <p className="text-red-300 mt-2">إدارة منتجاتك بسهولة</p>
+        </motion.div>
+
+        {/* === رسالة الخطأ === */}
+        <AnimatePresence>
+          {error && (
+            <motion.p
+              className="text-center text-red-400 mb-6"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              {error}
+            </motion.p>
+          )}
+        </AnimatePresence>
+
+        {/* === نموذج الإضافة/التعديل === */}
+        <motion.div
+          className="bg-[#242526]/80 backdrop-blur-xl p-6 rounded-2xl shadow-xl border border-gray-700/50 mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { key: 'name', placeholder: 'اسم المنتج', type: 'text' },
+              { key: 'price', placeholder: 'سعر الكرتونة', type: 'number' },
+              { key: 'quantityPerCarton', placeholder: 'الكرتونة (جوز)', type: 'number' },
+              { key: 'manufacturer', placeholder: 'المصنع', type: 'text' },
+              { key: 'description', placeholder: 'الوصف (اختياري)', type: 'text' },
+            ].map(field => (
+              <input
+                key={field.key}
+                type={field.type}
+                placeholder={field.placeholder}
+                value={form[field.key]}
+                onChange={e => setForm({ ...form, [field.key]: e.target.value })}
+                className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200"
+              />
+            ))}
+            <select
+              value={form.type}
+              onChange={e => setForm({ ...form, type: e.target.value })}
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200"
+            >
+              <option value="" disabled>اختر النوع</option>
+              <option value="رجالي">رجالي</option>
+              <option value="حريمي">حريمي</option>
+              <option value="أطفال">أطفال</option>
+            </select>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleImageChange}
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-600 file:text-white hover:file:bg-red-700"
+            />
+            <input
+              type="file"
+              multiple
+              accept="video/*"
+              onChange={handleVideoChange}
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-600 file:text-white hover:file:bg-red-700"
+            />
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <motion.button
+              onClick={handleAddOrUpdateProduct}
+              className="flex-1 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-md"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {isEditing ? 'تعديل المنتج' : 'إضافة منتج'}
+            </motion.button>
+            {isEditing && (
+              <motion.button
+                onClick={resetForm}
+                className="flex-1 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 shadow-md"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                إلغاء التعديل
+              </motion.button>
+            )}
+          </div>
+        </motion.div>
+
+        {/* === المنتجات === */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products.length === 0 ? (
+            <motion.p
+              className="col-span-full text-center text-slate-400 text-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              لا توجد منتجات بعد. ابدأ بإضافة منتج!
+            </motion.p>
+          ) : (
+            products.map((product, index) => (
+              <motion.div
+                key={product._id}
+                className="bg-[#242526]/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden"
+                variants={cardVariants}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, amount: 0.3 }}
+                whileHover="hover"
+                custom={index}
+              >
+                {/* الصورة الرئيسية */}
+                <div className="p-4">
+                  {product.images?.[0] ? (
+                    <img
+                      src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[0]}`}
+                      alt={product.name}
+                      className="w-full h-48 object-cover rounded-xl"
+                      onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; }}
+                    />
+                  ) : (
+                    <img
+                      src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`}
+                      alt="بديل"
+                      className="w-full h-48 object-cover rounded-xl"
+                    />
+                  )}
+                </div>
+
+                {/* المعلومات */}
+                <div className="p-5 space-y-2 text-right border-t border-gray-700">
+                  <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
+                    {product.name}
+                  </h3>
+                  <p className="text-sm text-gray-300">الحالة: {product.approved ? 'موافق' : 'في الانتظار'}</p>
+                  <p className="text-sm text-gray-300">سعر الكرتونة: {product.price} جنيه</p>
+                  <p className="text-sm text-gray-300">سعر الجوز: {(product.price / product.quantityPerCarton).toFixed(2)} جنيه</p>
+                  <p className="text-sm text-gray-300">الكمية: {product.quantityPerCarton} جوز</p>
+                  <p className="text-sm text-gray-300">المصنع: {product.manufacturer}</p>
+                  <p className="text-sm text-gray-300 line-clamp-2">الوصف: {product.description || 'لا يوجد'}</p>
+
+                  {/* معاينة الوسائط */}
+                  <div className="flex flex-wrap gap-2 mt-3 justify-end">
+                    {product.images?.map((img, i) => (
+                      <img
+                        key={i}
+                        src={`${process.env.REACT_APP_API_URL}/uploads/${img}`}
+                        alt=""
+                        className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-red-500 transition"
+                        onClick={() => openMedia(img, 'image')}
+                        onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; }}
+                      />
+                    ))}
+                    {product.videos?.map((vid, i) => (
+                      <video
+                        key={i}
+                        src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`}
+                        className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-red-500 transition"
+                        onClick={() => openMedia(vid, 'video')}
+                      />
+                    ))}
+                  </div>
+
+                  {/* الأزرار */}
+                  <div className="flex gap-2 mt-4">
+                    <motion.button
+                      onClick={() => handleEdit(product)}
+                      className="flex-1 py-2 rounded-lg text-white font-medium bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      تعديل
+                    </motion.button>
+                    <motion.button
+                      onClick={() => handleDelete(product._id)}
+                      className="flex-1 py-2 rounded-lg text-white font-medium bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      حذف
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* === مودال الوسائط === */}
       <AnimatePresence>
         {selectedMedia && (
           <motion.div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            variants={modalVariants}
+            className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={closeMedia}
           >
-            <motion.div className="relative" onClick={(e) => e.stopPropagation()}>
+            <motion.div
+              className="relative max-w-4xl max-h-screen"
+              onClick={e => e.stopPropagation()}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+            >
               {selectedMedia.type === 'image' ? (
-                <img
-                  src={selectedMedia.url}
-                  className="max-w-full max-h-screen rounded-xl"
-                  alt="صورة كاملة"
-                  onError={(e) => {
-                    console.error('خطأ في تحميل الصورة في المودال:', e);
-                    e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
-                  }}
-                />
+                <img src={selectedMedia.url} alt="" className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               ) : (
-                <video
-                  src={selectedMedia.url}
-                  className="max-w-full max-h-screen rounded-xl"
-                  controls
-                  autoPlay
-                  onError={(e) => console.error('خطأ في تحميل الفيديو في المودال:', e)}
-                />
+                <video src={selectedMedia.url} controls autoPlay className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               )}
-              <motion.button
+              <button
                 onClick={closeMedia}
-                className="absolute top-2 right-2 text-red-500 text-2xl bg-gray-900/70 rounded-full p-2 hover:text-red-400 hover:bg-gray-900/90"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+                className="absolute top-4 right-4 bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-lg hover:bg-red-700"
               >
                 ×
-              </motion.button>
+              </button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 };
 

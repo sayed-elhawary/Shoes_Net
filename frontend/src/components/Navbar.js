@@ -1,7 +1,7 @@
 // frontend/src/components/Navbar.js
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
@@ -29,81 +29,49 @@ const Navbar = () => {
     };
   }, []);
 
-  // === تسجيل الخروج مع توجيه فوري لـ /login ===
+  // === تسجيل الخروج ===
   const handleLogout = () => {
-    // مسح البيانات
     localStorage.removeItem('token');
     localStorage.removeItem('role');
     localStorage.removeItem('userId');
-
-    // تحديث الحالة محليًا
     setUser(null);
     setIsMobileMenuOpen(false);
-
-    // إرسال الحدث لتحديث App.js
     window.dispatchEvent(new Event('authChange'));
-
-    // التوجيه الفوري إلى /login
     navigate('/login', { replace: true });
   };
 
-  const handleLinkClick = () => {
-    setIsMobileMenuOpen(false);
-  };
+  const handleLinkClick = () => setIsMobileMenuOpen(false);
+  const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(prev => !prev);
-  };
-
+  // أنيميشن خفيفة
   const navItemVariants = {
-    hover: {
-      scale: 1.05,
-      backgroundColor: 'rgba(59, 130, 246, 0.7)',
-      transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] },
-    },
-    tap: {
-      scale: 0.98,
-      transition: { duration: 0.1, ease: 'easeOut' },
-    },
+    hover: { scale: 1.03, transition: { duration: 0.2 } },
+    tap: { scale: 0.98, transition: { duration: 0.1 } }
   };
 
   return (
     <motion.nav
-      className="bg-[#1F1F2E] text-white p-4 shadow-2xl border-b border-gray-700 sticky top-0 z-50"
-      initial={{ opacity: 0, y: -20 }}
+      className="bg-[#18191a] text-white p-4 border-b border-[#3a3b3c] sticky top-0 z-50 shadow-sm"
+      initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.4 }}
     >
-      <div className="container mx-auto flex justify-between items-center">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
         {/* === اللوجو === */}
-        <Link
-          to="/"
-          className="flex items-center space-x-2 space-x-reverse"
-          onClick={handleLinkClick}
-        >
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            className="flex items-center"
-          >
-            <img
-              src="/icon.png"
-              alt="SHOSE NET"
-              className="w-10 h-10 object-contain drop-shadow-lg"
-            />
-            <span className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600 hidden sm:block">
-              SHOSE NET
-            </span>
+        <Link to="/" onClick={handleLinkClick} className="flex items-center gap-2">
+          <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}>
+            <img src="/icon.png" alt="SHOSE NET" className="w-9 h-9 object-contain" />
           </motion.div>
+          <span className="text-xl font-bold hidden sm:block">SHOSE NET</span>
         </Link>
 
-        {/* زر القائمة على الموبايل */}
+        {/* زر الموبايل */}
         <button
-          className="md:hidden p-2 rounded-lg focus:outline-none"
+          className="md:hidden p-2 rounded-lg hover:bg-[#242526] transition"
           onClick={toggleMobileMenu}
           aria-label="قائمة"
         >
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -114,29 +82,31 @@ const Navbar = () => {
         </button>
 
         {/* القائمة على الشاشات الكبيرة */}
-        <div className="hidden md:flex space-x-6 space-x-reverse items-center">
+        <div className="hidden md:flex items-center gap-4">
           {renderNavLinks(handleLinkClick)}
           {renderAuthButton(handleLogout)}
         </div>
       </div>
 
       {/* القائمة على الموبايل */}
-      {isMobileMenuOpen && (
-        <motion.div
-          className="md:hidden mt-4 flex flex-col space-y-3"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {renderNavLinks(handleLinkClick)}
-          {renderAuthButton(handleLogout, true)}
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            className="md:hidden mt-4 flex flex-col gap-2"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {renderNavLinks(handleLinkClick)}
+            {renderAuthButton(handleLogout, true)}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.nav>
   );
 
-  // دالة لتوليد الروابط
+  // === الروابط ===
   function renderNavLinks(onClick) {
     return (
       <>
@@ -149,28 +119,23 @@ const Navbar = () => {
         {user?.role === 'admin' && (
           <>
             <NavLink to="/admin" currentPath={location.pathname} onClick={onClick}>لوحة الأدمن</NavLink>
-            <NavLink to="/create-vendor" currentPath={location.pathname} onClick={onClick} color="green">
-              إضافة تاجر
-            </NavLink>
-            <NavLink to="/create-customer" currentPath={location.pathname} onClick={onClick} color="green">
-              إضافة عميل
-            </NavLink>
-            <NavLink to="/block-customer" currentPath={location.pathname} onClick={onClick} color="red">
-              حظر عميل
-            </NavLink>
+            <NavLink to="/create-vendor" currentPath={location.pathname} onClick={onClick} color="green">إضافة تاجر</NavLink>
+            <NavLink to="/create-customer" currentPath={location.pathname} onClick={onClick} color="green">إضافة عميل</NavLink>
+            <NavLink to="/block-customer" currentPath={location.pathname} onClick={onClick} color="red">حظر عميل</NavLink>
+            <NavLink to="/admin/pending-customers" currentPath={location.pathname} onClick={onClick} color="yellow">طلبات التسجيل</NavLink>
           </>
         )}
       </>
     );
   }
 
-  // دالة لزر تسجيل الدخول/الخروج
+  // === زر تسجيل الدخول/الخروج ===
   function renderAuthButton(onLogout, isMobile = false) {
     if (user) {
       return (
         <motion.button
           onClick={onLogout}
-          className={`px-4 py-2 bg-red-600/80 rounded-xl text-white font-semibold ${isMobile ? 'text-right w-full' : ''}`}
+          className={`px-4 py-2 bg-red-600/80 rounded-lg text-sm font-medium hover:bg-red-700 transition ${isMobile ? 'w-full text-right' : ''}`}
           variants={navItemVariants}
           whileHover="hover"
           whileTap="tap"
@@ -181,7 +146,7 @@ const Navbar = () => {
     }
     return (
       <motion.div
-        className={`px-4 py-2 bg-green-600/80 rounded-xl text-white font-semibold ${isMobile ? 'text-right w-full' : ''}`}
+        className={`px-4 py-2 bg-green-600/80 rounded-lg text-sm font-medium hover:bg-green-700 transition ${isMobile ? 'w-full text-right' : ''}`}
         variants={navItemVariants}
         whileHover="hover"
         whileTap="tap"
@@ -192,18 +157,24 @@ const Navbar = () => {
   }
 };
 
-// مكون صغير للرابط
+// === مكون الرابط ===
 const NavLink = ({ to, currentPath, children, onClick, color = 'blue' }) => {
   const isActive = currentPath === to;
-  const activeColor = color === 'green' ? 'bg-green-600/50' : color === 'red' ? 'bg-red-600/50' : 'bg-blue-600/50';
-  const hoverColor = color === 'green' ? 'hover:bg-green-600/30' : color === 'red' ? 'hover:bg-red-600/30' : 'hover:bg-blue-600/30';
+  const activeBg = 
+    color === 'green' ? 'bg-green-600/30' : 
+    color === 'red' ? 'bg-red-600/30' : 
+    color === 'yellow' ? 'bg-yellow-600/30' : 
+    'bg-blue-600/30';
+  const hoverBg = 
+    color === 'green' ? 'hover:bg-green-600/20' : 
+    color === 'red' ? 'hover:bg-red-600/20' : 
+    color === 'yellow' ? 'hover:bg-yellow-600/20' : 
+    'hover:bg-blue-600/20';
   return (
     <Link
       to={to}
       onClick={onClick}
-      className={`px-4 py-2 rounded-xl transition duration-200 text-right block ${
-        isActive ? activeColor : hoverColor
-      }`}
+      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${isActive ? activeBg : hoverBg} ${isActive ? 'ring-2 ring-white/50' : ''}`}
     >
       {children}
     </Link>

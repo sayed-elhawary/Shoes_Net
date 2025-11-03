@@ -1,9 +1,21 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+// capacitor.config.ts
+import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'shose.duckdns.org',
-  appName: 'shose-Net',
-  webDir: 'build'
+  appId: 'com.yourcompany.app',
+  appName: 'Shose-Net',
+  webDir: 'build',
+  bundledWebRuntime: false,
+  plugins: {},
+  android: {
+    backgroundColor: '#FFFFFF',
+    splash: {
+      launchAutoHide: true,
+      androidScaleType: 'CENTER_CROP',
+      imageName: 'icon.png' // هنا حددنا أيقونة التطبيق
+    }
+  }
 };
 
 export default config;
+

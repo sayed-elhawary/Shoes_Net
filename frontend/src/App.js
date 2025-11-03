@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import VendorProducts from './pages/VendorProducts';
 import Vendors from './pages/Vendors';
 import Navbar from './components/Navbar';
+import PendingCustomers from './pages/PendingCustomers'; // استيراد الصفحة الجديدة
 import { useState, useEffect } from 'react';
 
 function App() {
@@ -21,14 +22,9 @@ function App() {
       const token = localStorage.getItem('token');
       setIsAuthenticated(!!token);
     };
-
-    // تحديث فوري عند التحميل
     handleAuthChange();
-
-    // استماع للتغييرات
     window.addEventListener('storage', handleAuthChange);
     window.addEventListener('authChange', handleAuthChange);
-
     return () => {
       window.removeEventListener('storage', handleAuthChange);
       window.removeEventListener('authChange', handleAuthChange);
@@ -49,6 +45,8 @@ function App() {
         <Route path="/block-customer" element={<BlockCustomer />} />
         <Route path="/vendors" element={<Vendors />} />
         <Route path="/vendors/:vendorId/products" element={<VendorProducts />} />
+        {/* صفحة طلبات التسجيل المعلقة - للأدمن فقط */}
+        <Route path="/admin/pending-customers" element={<PendingCustomers />} />
       </Routes>
     </>
   );

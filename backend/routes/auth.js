@@ -8,6 +8,90 @@ const Merchant = require('../models/Merchant');
 const Customer = require('../models/Customer');
 const auth = require('../middleware/auth');
 
+// تسجيل عميل جديد (من اللوجين - بدون موافقة فورية)
+router.post('/register-customer-public', async (req, res) => {
+  try {
+    const { name, phone, password } = req.body;
+
+    // تحقق من وجود الهاتف
+    const existingCustomer = await Customer.findOne({ phone });
+    if (existingCustomer) {
+      return res.status(400).json({ message: 'رقم الهاتف موجود بالفعل' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const customer = new Customer({
+      name,
+      phone,
+      password: hashedPassword,
+      isPending: true,
+      isApproved: false
+    });
+
+    await customer.save();
+    res.status(201).json({ message: 'تم إرسال طلب التسجيل، بانتظار موافقة الأدمن' });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// جلب العملاء المعلقين (للأدمن)
+router.get('/pending-customers', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'غير مصرح' });
+    }
+    const pending = await Customer.find({ isPending: true }).select('-password');
+    res.json(pending);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// موافقة على عميل
+router.post('/approve-customer', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'غير مصرح: للأدمن فقط' });
+    }
+    const { phone } = req.body;
+    const customer = await Customer.findOne({ phone });
+    if (!customer) {
+      return res.status(404).json({ message: 'العميل غير موجود' });
+    }
+    if (!customer.isPending) {
+      return res.status(400).json({ message: 'العميل ليس في حالة انتظار' });
+    }
+    customer.isPending = false;
+    customer.isApproved = true;
+    await customer.save();
+    res.json({ message: 'تمت الموافقة على العميل بنجاح' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// رفض عميل (مع سبب اختياري)
+router.post('/reject-customer', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'غير مصرح: للأدمن فقط' });
+    }
+    const { phone, reason } = req.body;
+    const customer = await Customer.findOne({ phone });
+    if (!customer) {
+      return res.status(404).json({ message: 'العميل غير موجود' });
+    }
+    if (!customer.isPending) {
+      return res.status(400).json({ message: 'العميل ليس في حالة انتظار' });
+    }
+    await Customer.deleteOne({ _id: customer._id });
+    res.json({ message: `تم رفض الطلب: ${reason || 'لا يوجد سبب'}` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // تسجيل تاجر جديد
 router.post('/register', async (req, res) => {
   try {
@@ -33,7 +117,13 @@ router.post('/register-customer', auth, async (req, res) => {
       return res.status(400).json({ message: 'رقم الهاتف موجود بالفعل' });
     }
     const hashedPassword = await bcrypt.hash(password, 12);
-    const customer = new Customer({ name, phone, password: hashedPassword });
+    const customer = new Customer({
+      name,
+      phone,
+      password: hashedPassword,
+      isPending: false,
+      isApproved: true
+    });
     await customer.save();
     res.status(201).json({ message: 'تم إنشاء العميل بنجاح' });
   } catch (err) {
@@ -65,7 +155,6 @@ router.put('/update-customer', auth, async (req, res) => {
     if (!customer) {
       return res.status(404).json({ message: 'العميل غير موجود' });
     }
-
     if (newPhone && newPhone !== phone) {
       const exists = await Customer.findOne({ phone: newPhone });
       if (exists) {
@@ -73,12 +162,10 @@ router.put('/update-customer', auth, async (req, res) => {
       }
       customer.phone = newPhone;
     }
-
     if (name) customer.name = name;
     if (password) {
       customer.password = await bcrypt.hash(password, 12);
     }
-
     await customer.save();
     res.json({ message: 'تم تحديث بيانات العميل بنجاح' });
   } catch (err) {
@@ -142,8 +229,14 @@ router.post('/login', async (req, res) => {
     if (phone) {
       user = await Customer.findOne({ phone });
       role = 'customer';
-      if (user && user.isBlocked) {
-        return res.status(403).json({ message: 'حسابك محظور، تواصل مع الإدارة' });
+
+      if (user) {
+        if (user.isPending) {
+          return res.status(403).json({ message: 'حسابك في انتظار موافقة الأدمن' });
+        }
+        if (user.isBlocked) {
+          return res.status(403).json({ message: 'حسابك محظور، تواصل مع الإدارة' });
+        }
       }
     }
 
@@ -174,6 +267,22 @@ router.post('/login', async (req, res) => {
     res.json({ token, role, userId: user._id });
   } catch (err) {
     console.error('Error in login:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+// حذف عميل
+router.delete('/delete-customer', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'غير مصرح: للأدمن فقط' });
+    }
+    const { phone } = req.body;
+    const customer = await Customer.findOneAndDelete({ phone });
+    if (!customer) {
+      return res.status(404).json({ message: 'العميل غير موجود' });
+    }
+    res.json({ message: 'تم حذف العميل بنجاح' });
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });

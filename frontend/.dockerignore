@@ -1,0 +1,10 @@
+node_modules
+build
+android
+ios
+.git
+.gitignore
+npm-debug.log
+Dockerfile
+docker-compose.yml
+

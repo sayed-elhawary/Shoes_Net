@@ -57,12 +57,20 @@ const Navbar = () => {
       transition={{ duration: 0.4 }}
     >
       <div className="max-w-7xl mx-auto flex justify-between items-center">
-        {/* === اللوجو === */}
-        <Link to="/" onClick={handleLinkClick} className="flex items-center gap-2">
+        {/* === اللوجو + النص (في الموبايل والكمبيوتر) === */}
+        <Link to="/" onClick={handleLinkClick} className="flex items-center gap-3">
           <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}>
-            <img src="/icon.png" alt="SHOSE NET" className="w-9 h-9 object-contain" />
+            {/* حجم الأيقونة أكبر في الموبايل */}
+            <img 
+              src="/icon.png" 
+              alt="SHOSE NET" 
+              className="w-14 h-14 sm:w-16 sm:h-16 object-contain" 
+            />
           </motion.div>
-          <span className="text-xl font-bold hidden sm:block">SHOSE NET</span>
+          {/* النص يظهر دائمًا في الموبايل */}
+          <span className="text-xl sm:text-2xl font-bold text-white">
+            Web Shose
+          </span>
         </Link>
 
         {/* زر الموبايل */}
@@ -160,15 +168,15 @@ const Navbar = () => {
 // === مكون الرابط ===
 const NavLink = ({ to, currentPath, children, onClick, color = 'blue' }) => {
   const isActive = currentPath === to;
-  const activeBg = 
-    color === 'green' ? 'bg-green-600/30' : 
-    color === 'red' ? 'bg-red-600/30' : 
-    color === 'yellow' ? 'bg-yellow-600/30' : 
+  const activeBg =
+    color === 'green' ? 'bg-green-600/30' :
+    color === 'red' ? 'bg-red-600/30' :
+    color === 'yellow' ? 'bg-yellow-600/30' :
     'bg-blue-600/30';
-  const hoverBg = 
-    color === 'green' ? 'hover:bg-green-600/20' : 
-    color === 'red' ? 'hover:bg-red-600/20' : 
-    color === 'yellow' ? 'hover:bg-yellow-600/20' : 
+  const hoverBg =
+    color === 'green' ? 'hover:bg-green-600/20' :
+    color === 'red' ? 'hover:bg-red-600/20' :
+    color === 'yellow' ? 'hover:bg-yellow-600/20' :
     'hover:bg-blue-600/20';
   return (
     <Link

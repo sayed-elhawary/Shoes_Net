@@ -1,21 +1,17 @@
-// capacitor.config.ts
+// frontend/capacitor.config.ts
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.yourcompany.app',
-  appName: 'Shose-Net',
-  webDir: 'build',
+  appId: 'com.shoes.app',
+  appName: 'Shoes-Net',
+  webDir: 'build', // تأكد إنه build
   bundledWebRuntime: false,
-  plugins: {},
   android: {
-    backgroundColor: '#FFFFFF',
-    splash: {
-      launchAutoHide: true,
-      androidScaleType: 'CENTER_CROP',
-      imageName: 'icon.png' // هنا حددنا أيقونة التطبيق
-    }
+    backgroundColor: '#18191a'
+  },
+  ios: {
+    backgroundColor: '#18191a'
   }
 };
 
 export default config;
-

@@ -1,3 +1,4 @@
+// backend/models/Product.js
 const mongoose = require('mongoose');
 
 const productSchema = new mongoose.Schema({
@@ -11,11 +12,10 @@ const productSchema = new mongoose.Schema({
     type: String,
     validate: {
       validator: function (images) {
-        // إذا كان هناك فيديوهات، يجب أن يكون هناك صورة واحدة على الأقل
         if (this.videos && this.videos.length > 0) {
           return images && images.length >= 1;
         }
-        return true; // إذا لم يكن هناك فيديوهات، الصور اختيارية
+        return true;
       },
       message: 'يجب رفع صورة واحدة على الأقل عند رفع فيديو'
     }
@@ -23,6 +23,8 @@ const productSchema = new mongoose.Schema({
   videos: [{ type: String }],
   vendor: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
   approved: { type: Boolean, default: false },
+}, {
+  timestamps: true   // ← هذا السطر الجديد
 });
 
 module.exports = mongoose.model('Product', productSchema);

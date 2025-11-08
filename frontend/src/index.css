@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* عزل الـ Navbar بدون إفساد الـ body */
+.navbar-container {
+  all: initial;
+  display: block;
+  font-family: inherit;
+  isolation: isolate;
+}
+
+/* نرجّع الـ Tailwind للعناصر الداخلية فقط */
+.navbar-container * {
+  all: unset;
+  box-sizing: border-box;
+  @apply font-sans antialiased;
+}
+
+/* تأكيد لون الـ body لكل الصفحات */
+html, body {
+  @apply bg-gray-50 text-gray-900 min-h-screen;
+}

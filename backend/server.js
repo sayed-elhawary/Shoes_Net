@@ -7,8 +7,8 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { Server } = require('socket.io');
-
 dotenv.config();
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -24,8 +24,6 @@ if (!fs.existsSync(uploadsDir)) {
 const placeholderImagePath = path.join(uploadsDir, 'placeholder-image.jpg');
 if (!fs.existsSync(placeholderImagePath)) {
   try {
-    // إذا لم يكن لديك ملف placeholder-image.jpg، يمكنك نسخه من مصدر آخر
-    // على سبيل المثال، افترض أن لديك الملف في public/placeholder-image.jpg
     const sourcePlaceholder = path.join(__dirname, 'public', 'placeholder-image.jpg');
     if (fs.existsSync(sourcePlaceholder)) {
       fs.copyFileSync(sourcePlaceholder, placeholderImagePath);
@@ -50,7 +48,6 @@ app.use('/Uploads', (req, res, next) => {
   const filePath = path.join(uploadsDir, req.path);
   if (!fs.existsSync(filePath)) {
     console.warn(`File not found: ${filePath}`);
-    // إرجاع placeholder-image.jpg كبديل إذا لم يتم العثور على الملف
     if (fs.existsSync(placeholderImagePath)) {
       return res.sendFile(placeholderImagePath);
     }
@@ -91,6 +88,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
+
 const onlineUsers = new Set();
 app.set('io', io);
 app.set('onlineUsers', onlineUsers);
@@ -110,7 +108,6 @@ async function emitUnreadCountUpdate(orderId, io) {
     const vendorId = order.product.vendor._id.toString();
     const customerUnread = (order.messages || []).filter(m => m.from === 'vendor' && !m.isRead).length;
     const vendorUnread = (order.messages || []).filter(m => m.from === 'customer' && !m.isRead).length;
-
     io.to(`user_${customerId}`).emit('unreadUpdate', {
       orderId: order._id.toString(),
       unreadCount: customerUnread,
@@ -132,6 +129,10 @@ async function emitUnreadCountUpdate(orderId, io) {
 // إدارة الاتصال عبر Socket.IO
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
+
+  // === التحسين: كل عميل ينضم للغرفة العامة للمنتجات ===
+  socket.join('public_products');
+  // === نهاية التحسين ===
 
   socket.on('authenticate', (data) => {
     const { userId, role } = data;
@@ -160,7 +161,6 @@ io.on('connection', (socket) => {
     }
     socket.join(`order_${orderId}`);
     console.log(`User ${socket.userId} joined order_${orderId}`);
-    // إرسال إشعار بأن العميل انضم بنجاح
     socket.emit('orderJoined', { orderId });
   });
 
@@ -225,6 +225,5 @@ app.set('emitUnreadCountUpdate', emitUnreadCountUpdate);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
-console.log(`Server running on http://81.10.88.159:${PORT}`);
-
+  console.log(`Server running on http://81.10.88.159:${PORT}`);
 });

@@ -6,7 +6,6 @@ import axios from 'axios';
 // -------------------------------------------------
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 // -------------------------------------------------
-
 const CustomLoadingSpinner = () => (
   <div className="flex items-center justify-center gap-2">
     <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
@@ -16,7 +15,6 @@ const CustomLoadingSpinner = () => (
     <span className="text-sm">جارٍ التحميل...</span>
   </div>
 );
-
 const Login = () => {
   const [form, setForm] = useState({ emailOrPhone: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ name: '', phone: '', password: '' });
@@ -109,10 +107,10 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#18191a] text-white relative overflow-hidden">
-      {/* خلفية ناعمة */}
+      {/* خلفية ناعمة - موف */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
 
       <div className="relative z-10 w-full max-w-md">
@@ -127,6 +125,7 @@ const Login = () => {
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="relative">
+                {/* دائرة دوارة - موف متدرج */}
                 <motion.div
                   className="absolute inset-0 -m-6"
                   initial={{ rotate: 0 }}
@@ -136,9 +135,9 @@ const Login = () => {
                   <svg className="w-full h-full" viewBox="0 0 200 200">
                     <defs>
                       <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#ef4444" />
-                        <stop offset="50%" stopColor="#f87171" />
-                        <stop offset="100%" stopColor="#fca5a5" />
+                        <stop offset="0%" stopColor="#a855f7" />
+                        <stop offset="50%" stopColor="#c084fc" />
+                        <stop offset="100%" stopColor="#e9d5ff" />
                       </linearGradient>
                     </defs>
                     <circle cx="100" cy="100" r="90" fill="none" stroke="url(#gradient)" strokeWidth="3" strokeDasharray="15 15" className="opacity-50" />
@@ -146,7 +145,7 @@ const Login = () => {
                 </motion.div>
                 <motion.img
                   src="/icon.png"
-                  alt="SHOSE NET"
+                  alt="Web Shose"
                   className="w-36 h-36 object-contain drop-shadow-xl relative z-10"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
@@ -159,9 +158,9 @@ const Login = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.8 }}
               >
-                <p className="text-lg font-medium text-red-400 tracking-widest">أهلاً بك في</p>
-                <p className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
-                  متجر SHOSE NET
+                <p className="text-lg font-medium text-purple-400 tracking-widest">أهلاً بك في</p>
+                <p className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+                  Web Shose
                 </p>
               </motion.div>
             </motion.div>
@@ -183,7 +182,7 @@ const Login = () => {
                   type="button"
                   onClick={() => setIsRegistering(false)}
                   className={`px-4 py-2 rounded-lg font-medium transition ${
-                    !isRegistering ? 'bg-red-600 text-white shadow-md' : 'bg-gray-700 text-gray-400'
+                    !isRegistering ? 'bg-purple-700 text-white shadow-md' : 'bg-gray-700 text-gray-400'
                   }`}
                 >
                   تسجيل الدخول
@@ -192,7 +191,7 @@ const Login = () => {
                   type="button"
                   onClick={() => setIsRegistering(true)}
                   className={`px-4 py-2 rounded-lg font-medium transition ${
-                    isRegistering ? 'bg-green-600 text-white shadow-md' : 'bg-gray-700 text-gray-400'
+                    isRegistering ? 'bg-purple-700 text-white shadow-md' : 'bg-gray-700 text-gray-400'
                   }`}
                 >
                   إنشاء حساب
@@ -203,7 +202,7 @@ const Login = () => {
               <AnimatePresence>
                 {error && (
                   <motion.div
-                    className="bg-red-500/20 border border-red-500/50 text-red-300 p-3 rounded-xl mb-4 text-center text-sm"
+                    className="bg-purple-500/20 border border-purple-500/50 text-purple-300 p-3 rounded-xl mb-4 text-center text-sm"
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
@@ -213,7 +212,7 @@ const Login = () => {
                 )}
                 {success && (
                   <motion.div
-                    className="bg-green-500/20 border border-green-500/50 text-green-300 p-3 rounded-xl mb-4 text-center text-sm"
+                    className="bg-purple-500/20 border border-purple-500/50 text-purple-300 p-3 rounded-xl mb-4 text-center text-sm"
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
@@ -232,7 +231,7 @@ const Login = () => {
                       type="text"
                       value={form.emailOrPhone}
                       onChange={e => setForm({ ...form, emailOrPhone: e.target.value })}
-                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200"
+                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-200"
                       placeholder="example@domain.com أو 01234567890"
                       required
                       disabled={loading}
@@ -244,7 +243,7 @@ const Login = () => {
                       type="password"
                       value={form.password}
                       onChange={e => setForm({ ...form, password: e.target.value })}
-                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200"
+                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-200"
                       placeholder="••••••••"
                       required
                       disabled={loading}
@@ -252,7 +251,7 @@ const Login = () => {
                   </div>
                   <button
                     type="submit"
-                    className="w-full p-4 rounded-xl text-white font-bold text-lg tracking-wide transition-all bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl disabled:opacity-70"
+                    className="w-full p-4 rounded-xl text-white font-bold text-lg tracking-wide transition-all bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 shadow-lg hover:shadow-xl disabled:opacity-70"
                     disabled={loading}
                   >
                     {loading ? <CustomLoadingSpinner /> : 'دخول'}
@@ -267,7 +266,7 @@ const Login = () => {
                       type="text"
                       value={registerForm.name}
                       onChange={e => setRegisterForm({ ...registerForm, name: e.target.value })}
-                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
+                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-200"
                       placeholder="أحمد محمد"
                       required
                       disabled={loading}
@@ -282,7 +281,7 @@ const Login = () => {
                         const v = e.target.value.replace(/\D/g, '').slice(0, 11);
                         setRegisterForm({ ...registerForm, phone: v });
                       }}
-                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
+                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-200"
                       placeholder="01234567890"
                       required
                       disabled={loading}
@@ -295,7 +294,7 @@ const Login = () => {
                       type="password"
                       value={registerForm.password}
                       onChange={e => setRegisterForm({ ...registerForm, password: e.target.value })}
-                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
+                      className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-200"
                       placeholder="••••••••"
                       required
                       disabled={loading}
@@ -304,7 +303,7 @@ const Login = () => {
                   </div>
                   <button
                     type="submit"
-                    className="w-full p-4 rounded-xl text-white font-bold text-lg tracking-wide transition-all bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl disabled:opacity-70"
+                    className="w-full p-4 rounded-xl text-white font-bold text-lg tracking-wide transition-all bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 shadow-lg hover:shadow-xl disabled:opacity-70"
                     disabled={loading}
                   >
                     {loading ? <CustomLoadingSpinner /> : 'إنشاء حساب'}
@@ -314,7 +313,7 @@ const Login = () => {
 
               {/* معلومات مساعدة */}
               <p className="text-center mt-6 text-gray-400 text-xs leading-relaxed">
-                للأدمن: <span className="text-red-300">admin@test.com</span> / 123456
+                للأدمن: <span className="text-purple-300">admin@test.com</span> / 123456
                 <br />
                 للتاجر: أنشئ من لوحة الأدمن
                 <br />
@@ -336,15 +335,15 @@ const Login = () => {
             transition={{ delay: 2.5, type: "spring", stiffness: 120 }}
             title="تواصل معانا عبر واتساب"
           >
-            <svg className="w-9 h-9 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.297-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 5.44h-.006c-1.58 0-3.13-.595-4.497-1.718l-.321-.19-3.313.873 1.002-3.233-.236-.375c-1.175-1.863-1.792-4.009-1.792-6.205 0-6.336 5.159-11.486 11.495-11.486 3.072 0 5.958 1.198 8.126 3.374 2.168 2.176 3.374 5.06 3.374 8.13-.001 6.336-5.16 11.486-11.495 11.486m6.708-18.74c-2.61-2.61-6.07-4.05-9.755-4.05-7.602 0-13.783 6.182-13.783 13.783 0 2.43.632 4.795 1.833 6.846l-1.947 6.298 6.45-1.692c1.988 1.084 4.218 1.657 6.474 1.657 7.602 0 13.783-6.182 13.783-13.783 0-3.686-1.44-7.146-4.055-9.755"/>
+            {/* أيقونة واتساب احترافية جدًا (SVG مخصص) */}
+            <svg className="w-10 h-10 text-white drop-shadow-lg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.04 2C6.49 2 2 6.48 2 12.04c0 1.9.52 3.75 1.51 5.35l-1.26 4.61 4.74-1.24c1.55.84 3.29 1.32 5.05 1.32 5.55 0 10.04-4.48 10.04-10.04C22.08 6.49 17.59 2 12.04 2zM17.2 15.41c-.24.67-.72 1.25-1.43 1.41-.59.13-1.37.13-2.31-.36-.71-.37-1.33-.85-1.94-1.38-.61-.53-1.17-1.15-1.67-1.82-.5-.67-.89-1.42-1.15-2.21-.26-.79-.17-1.48.22-2.03.39-.55 1.01-.79 1.68-.67.67.12 1.22.58 1.57 1.15.35.57.55 1.22.57 1.89.02.67-.23 1.3-.68 1.78-.45.48-1.06.83-1.72 1.02-.66.19-1.38.15-2.05-.11-.67-.26-1.27-.72-1.72-1.31-.45-.59-.73-1.28-.81-2.02-.08-.74.06-1.46.38-2.06.32-.6.82-.99 1.41-1.12.59-.13 1.21.02 1.71.41.5.39.86.94 1.06 1.55.2.61.25 1.26.15 1.91-.1.65-.43 1.23-.94 1.65-.51.42-1.18.64-1.89.64-.71 0-1.38-.28-1.88-.78-.5-.5-.78-1.17-.78-1.88 0-.71.28-1.38.78-1.88.5-.5 1.17-.78 1.88-.78.71 0 1.38.28 1.88.78.5.5.78 1.17.78 1.88 0 .71-.28 1.38-.78 1.88-.5.5-1.17.78-1.88.78z"/>
             </svg>
-
             {/* إشعار صغير يطلع من الأيقونة */}
             <AnimatePresence>
               {toastMessage && (
                 <motion.div
-                  className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-full text-xs font-medium shadow-xl whitespace-nowrap"
+                  className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-full text-xs font-medium shadow-xl whitespace-nowrap"
                   initial={{ opacity: 0, y: 10, scale: 0.8 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -10, scale: 0.8 }}
@@ -360,5 +359,4 @@ const Login = () => {
     </div>
   );
 };
-
 export default Login;

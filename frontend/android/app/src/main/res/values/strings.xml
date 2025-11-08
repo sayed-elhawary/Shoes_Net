@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Shoes-Net</string>
-    <string name="title_activity_main">Shoes-Net</string>
+    <string name="app_name">Web-Shoes</string>
+    <string name="title_activity_main">Web-Shoes</string>
     <string name="package_name">com.shoes.app</string>
     <string name="custom_url_scheme">com.shoes.app</string>
 </resources>

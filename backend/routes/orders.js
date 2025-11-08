@@ -8,11 +8,16 @@ const Customer = require('../models/Customer');
 const Vendor = require('../models/Vendor');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // === إعداد Multer لتخزين الصور في مجلد Uploads (بكبيتل) ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '..', 'Uploads'));
+    const uploadDir = path.join(__dirname, '..', 'Uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
@@ -24,9 +29,9 @@ const upload = multer({ storage });
 console.log('Orders route loaded');
 
 // === دالة لحساب عدد الرسائل غير المقروءة لمستخدم معين ===
-const calculateUnreadCount = (messages, userRole) => {
+const calculateUnreadCount = (messages = [], userRole) => {
   const fromField = userRole === 'vendor' ? 'customer' : 'vendor';
-  return (messages || []).filter(msg => msg.from === fromField && !msg.isRead).length;
+  return messages.filter(msg => msg.from === fromField && !msg.isRead).length;
 };
 
 // === دالة لإرسال تحديث unreadCount لكل المستخدمين المرتبطين ===
@@ -34,15 +39,19 @@ const broadcastUnreadUpdate = async (orderId, io) => {
   try {
     const order = await Order.findById(orderId)
       .populate('user', '_id')
-      .populate({ path: 'product', populate: { path: 'vendor', select: '_id' } });
+      .populate({
+        path: 'product',
+        populate: { path: 'vendor', select: '_id' }
+      })
+      .lean();
 
-    if (!order) return;
+    if (!order || !order.user || !order.product?.vendor) return;
 
     const adminRoom = 'admin_room';
     const customerRoom = `user_${order.user._id}`;
     const vendorRoom = `user_${order.product.vendor._id}`;
-
     const messages = order.messages || [];
+
     const customerUnread = calculateUnreadCount(messages, 'customer');
     const vendorUnread = calculateUnreadCount(messages, 'vendor');
 
@@ -50,8 +59,8 @@ const broadcastUnreadUpdate = async (orderId, io) => {
     io.to(customerRoom).emit('unreadUpdate', { orderId, unreadCount: customerUnread });
     // إرسال للتاجر
     io.to(vendorRoom).emit('unreadUpdate', { orderId, unreadCount: vendorUnread });
-    // إرسال للأدمن
-    io.to(adminRoom).emit('unreadUpdate', { orderId, unreadCount: vendorUnread }); // الأدمن يرى من العميل
+    // إرسال للأدمن (يرى رسائل العميل)
+    io.to(adminRoom).emit('unreadUpdate', { orderId, unreadCount: customerUnread });
   } catch (err) {
     console.error('Error broadcasting unread update:', err);
   }
@@ -70,7 +79,7 @@ router.get('/', auth, async (req, res) => {
       status,
       unreadOnly,
       page = 1,
-      limit
+      limit = 20
     } = req.query;
 
     let query = {};
@@ -91,10 +100,12 @@ router.get('/', auth, async (req, res) => {
       const num = parseInt(orderNumber);
       if (!isNaN(num)) {
         query.orderNumber = num;
+      } else {
+        query.orderNumber = { $regex: orderNumber, $options: 'i' };
       }
     }
 
-    // فلتر الحالة (يمكن تكرارها)
+    // فلتر الحالة
     if (status) {
       const statuses = Array.isArray(status) ? status : [status];
       if (statuses.length > 0) {
@@ -104,7 +115,7 @@ router.get('/', auth, async (req, res) => {
 
     // فلتر رقم الهاتف
     if (phone) {
-      const users = await Customer.find({ phone: { $regex: phone, $options: 'i' } }).select('_id');
+      const users = await Customer.find({ phone: { $regex: phone, $options: 'i' } }).select('_id').lean();
       if (users.length > 0) {
         query.user = { $in: users.map(u => u._id) };
       } else {
@@ -112,7 +123,7 @@ router.get('/', auth, async (req, res) => {
       }
     }
 
-    // فلتر الرسائل غير المقروءة فقط (للمستخدم الحالي)
+    // فلتر الرسائل غير المقروءة فقط
     if (unreadOnly === 'true') {
       const role = req.user.role;
       const fromField = role === 'vendor' ? 'customer' : 'vendor';
@@ -124,7 +135,7 @@ router.get('/', auth, async (req, res) => {
       };
     }
 
-    // بناء الاستعلام الأساسي
+    // === بناء الاستعلام الأساسي ===
     let ordersQuery = Order.find(query)
       .populate({
         path: 'product',
@@ -134,54 +145,73 @@ router.get('/', auth, async (req, res) => {
       .populate('user', 'name phone')
       .sort({ createdAt: -1 });
 
-    // تطبيق الـ pagination
-    if (limit) {
-      const limitNum = parseInt(limit);
-      const skip = (parseInt(page) - 1) * limitNum;
-      ordersQuery = ordersQuery.skip(skip).limit(limitNum);
-    }
+    // Pagination
+    const limitNum = parseInt(limit) || 20;
+    const skip = (parseInt(page) - 1) * limitNum;
+    ordersQuery = ordersQuery.skip(skip).limit(limitNum);
 
     let orders = await ordersQuery.lean();
 
-    // حساب عدد الرسائل غير المقروءة لكل طلب
-    const role = req.user.role;
+    // === حماية من null في populate ===
     orders = orders.map(order => {
-      const unreadCount = calculateUnreadCount(order.messages, role);
-      return { ...order, unreadCount };
+      const safeOrder = { ...order };
+
+      safeOrder.user = safeOrder.user || { name: 'زائر', phone: '-', _id: null };
+      safeOrder.product = safeOrder.product || { name: 'غير معروف', vendor: null };
+      safeOrder.product.vendor = safeOrder.product.vendor || { name: 'غير معروف', _id: null };
+
+      const unreadCount = calculateUnreadCount(safeOrder.messages, req.user.role);
+      safeOrder.unreadCount = unreadCount;
+
+      return safeOrder;
     });
 
-    // فلتر حسب التاجر (للأدمن)
+    // === فلتر التاجر (للأدمن) ===
     if (req.user.role === 'admin' && vendorName) {
-      const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id');
+      const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id').lean();
       const vendorIds = vendors.map(v => v._id);
-      const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id');
-      const productIds = products.map(p => p._id);
-
-      orders = orders.filter(order => productIds.some(id => id.equals(order.product._id)));
+      if (vendorIds.length > 0) {
+        const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id').lean();
+        const productIds = products.map(p => p._id);
+        orders = orders.filter(order => 
+          order.product && productIds.some(id => id.equals(order.product._id))
+        );
+      } else {
+        orders = [];
+      }
     }
 
-    // فلتر حسب التاجر (للتاجر نفسه)
+    // === فلتر التاجر (للتاجر نفسه) ===
     if (req.user.role === 'vendor') {
-      const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id');
+      const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id').lean();
       const productIds = vendorProducts.map(p => p._id);
-      orders = orders.filter(order => productIds.some(id => id.equals(order.product._id)));
+      orders = orders.filter(order => 
+        order.product && productIds.some(id => id.equals(order.product._id))
+      );
     }
 
-    // فلتر حسب العميل (للعميل)
+    // === فلتر العميل (للعميل) ===
     if (req.user.role === 'customer') {
-      orders = orders.filter(order => order.user && order.user._id.equals(req.user.id));
+      orders = orders.filter(order => 
+        order.user && order.user._id && order.user._id.equals(req.user.id)
+      );
     }
 
-    // حساب العدد الكلي بعد الفلاتر
+    // === حساب العدد الكلي بعد الفلاتر ===
     const totalQuery = { ...query };
+
     if (req.user.role === 'admin' && vendorName) {
-      const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id');
+      const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id').lean();
       const vendorIds = vendors.map(v => v._id);
-      const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id');
-      const productIds = products.map(p => p._id);
-      totalQuery.product = { $in: productIds };
+      if (vendorIds.length > 0) {
+        const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id').lean();
+        const productIds = products.map(p => p._id);
+        totalQuery.product = { $in: productIds };
+      } else {
+        return res.json({ orders: [], total: 0 });
+      }
     } else if (req.user.role === 'vendor') {
-      const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id');
+      const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id').lean();
       const productIds = vendorProducts.map(p => p._id);
       totalQuery.product = { $in: productIds };
     } else if (req.user.role === 'customer') {
@@ -204,20 +234,31 @@ router.post('/', auth, async (req, res) => {
   try {
     const productDoc = await Product.findById(product);
     if (!productDoc) return res.status(404).json({ message: 'المنتج غير موجود' });
-    if (vendor !== productDoc.vendor.toString()) return res.status(400).json({ message: 'التاجر غير صحيح' });
+
+    if (vendor !== productDoc.vendor.toString()) {
+      return res.status(400).json({ message: 'التاجر غير صحيح' });
+    }
 
     const customer = await Customer.findById(req.user.id);
     if (!customer) return res.status(404).json({ message: 'العميل غير موجود' });
 
     const order = new Order({
-      product, vendor, user: req.user.id, quantity, address,
-      status: 'pending', selectedImage: selectedImage || 'placeholder-image.jpg'
+      product,
+      vendor,
+      user: req.user.id,
+      quantity: parseInt(quantity) || 1,
+      address,
+      status: 'pending',
+      selectedImage: selectedImage || 'placeholder-image.jpg',
+      messages: []
     });
+
     await order.save();
 
     const populatedOrder = await Order.findById(order._id)
       .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
-      .populate('user', 'name phone');
+      .populate('user', 'name phone')
+      .lean();
 
     res.status(201).json({ message: 'تم إنشاء الطلب', order: populatedOrder });
   } catch (err) {
@@ -229,21 +270,29 @@ router.post('/', auth, async (req, res) => {
 // === تحديث حالة الطلب ===
 router.put('/:id/status', auth, async (req, res) => {
   try {
-    let order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
-    if (req.user.role !== 'vendor' || order.vendor.toString() !== req.user.id)
+
+    if (req.user.role !== 'vendor' || order.vendor.toString() !== req.user.id) {
       return res.status(403).json({ message: 'غير مصرح' });
+    }
 
     const { status } = req.body;
-    if (!['pending', 'shipped', 'delivered', 'rejected'].includes(status))
+    if (!['pending', 'shipped', 'delivered', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'حالة غير صالحة' });
+    }
 
     order.status = status;
     await order.save();
 
     const populated = await Order.findById(order._id)
       .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
-      .populate('user', 'name phone');
+      .populate('user', 'name phone')
+      .lean();
+
+    const io = req.app.get('io');
+    io.to(`order_${req.params.id}`).emit('messagesUpdated', populated.messages || []);
+    await broadcastUnreadUpdate(req.params.id, io);
 
     res.json({ message: 'تم تحديث الحالة', order: populated });
   } catch (err) {
@@ -255,23 +304,30 @@ router.put('/:id/status', auth, async (req, res) => {
 // === تعديل الطلب ===
 router.put('/:id', auth, async (req, res) => {
   try {
-    let order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
-    if (req.user.role !== 'customer' || order.user.toString() !== req.user.id)
+
+    if (req.user.role !== 'customer' || order.user.toString() !== req.user.id) {
       return res.status(403).json({ message: 'غير مصرح' });
-    if (order.status !== 'pending')
+    }
+    if (order.status !== 'pending') {
       return res.status(403).json({ message: 'لا يمكن التعديل' });
+    }
 
     const { quantity, address } = req.body;
-    if (quantity !== undefined && quantity < 1) return res.status(400).json({ message: 'الكمية يجب > 0' });
-    if (quantity !== undefined) order.quantity = quantity;
+    if (quantity !== undefined && (isNaN(quantity) || quantity < 1)) {
+      return res.status(400).json({ message: 'الكمية يجب > 0' });
+    }
+
+    if (quantity !== undefined) order.quantity = parseInt(quantity);
     if (address !== undefined) order.address = address;
 
     await order.save();
 
     const populated = await Order.findById(order._id)
       .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
-      .populate('user', 'name phone');
+      .populate('user', 'name phone')
+      .lean();
 
     res.json({ message: 'تم التعديل', order: populated });
   } catch (err) {
@@ -285,19 +341,32 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
-    if (req.user.role === 'admin' || (req.user.role === 'customer' && order.user.toString() === req.user.id && order.status === 'pending')) {
-      await Order.findByIdAndDelete(req.params.id);
-      res.json({ message: 'تم الحذف' });
-    } else {
-      res.status(403).json({ message: 'غير مصرح' });
+
+    const isAdmin = req.user.role === 'admin';
+    const isCustomerPending = req.user.role === 'customer' && 
+                              order.user.toString() === req.user.id && 
+                              order.status === 'pending';
+
+    if (!isAdmin && !isCustomerPending) {
+      return res.status(403).json({ message: 'غير مصرح' });
     }
+
+    if (order.selectedImage && order.selectedImage !== 'placeholder-image.jpg') {
+      const imagePath = path.join(__dirname, '..', 'Uploads', order.selectedImage);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
+
+    await Order.findByIdAndDelete(req.params.id);
+    res.json({ message: 'تم الحذف' });
   } catch (err) {
     console.error('Delete error:', err);
     res.status(400).json({ message: err.message });
   }
 });
 
-// === إضافة رسالة (الحل النهائي) ===
+// === إضافة رسالة ===
 router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -305,15 +374,24 @@ router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
 
     const { text } = req.body;
     const image = req.file ? req.file.filename : null;
-
-    if (!text && !image) return res.status(400).json({ message: 'يجب إرسال نص أو صورة' });
+    if (!text?.trim() && !image) {
+      return res.status(400).json({ message: 'يجب إرسال نص أو صورة' });
+    }
 
     let from;
     if (req.user.role === 'vendor' && order.vendor.toString() === req.user.id) from = 'vendor';
     else if (req.user.role === 'customer' && order.user.toString() === req.user.id) from = 'customer';
     else return res.status(403).json({ message: 'غير مصرح' });
 
-    const messageObj = { from, text: text || '', image, timestamp: new Date(), isDelivered: false, isRead: false };
+    const messageObj = {
+      from,
+      text: text?.trim() || '',
+      image,
+      timestamp: new Date(),
+      isDelivered: false,
+      isRead: false
+    };
+
     order.messages.push(messageObj);
     await order.save();
 
@@ -325,20 +403,18 @@ router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
       await order.save();
     }
 
-    // جلب الطلب كاملاً بعد التحديث
     const populatedOrder = await Order.findById(order._id)
       .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
-      .populate('user', 'name phone');
+      .populate('user', 'name phone')
+      .lean();
 
     const io = req.app.get('io');
     const room = `order_${req.params.id}`;
     io.to(room).emit('newMessage', messageObj);
-    io.to(room).emit('messagesUpdated', populatedOrder.messages);
+    io.to(room).emit('messagesUpdated', populatedOrder.messages || []);
 
-    // إرسال تحديث unreadCount للجميع
     await broadcastUnreadUpdate(req.params.id, io);
 
-    // إرجاع الطلب كاملاً (لا الرسالة فقط)
     res.json({ message: 'تم إرسال الرسالة', order: populatedOrder });
   } catch (err) {
     console.error('Message send error:', err);
@@ -349,12 +425,15 @@ router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
 // === تحديث قراءة الرسائل ===
 router.post('/:id/markRead', auth, async (req, res) => {
   try {
-    let order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
 
     const role = req.user.role;
-    if ((role === 'customer' && order.user.toString() !== req.user.id) ||
-        (role === 'vendor' && order.vendor.toString() !== req.user.id)) {
+    const isAuthorized = 
+      (role === 'customer' && order.user.toString() === req.user.id) ||
+      (role === 'vendor' && order.vendor.toString() === req.user.id);
+
+    if (!isAuthorized) {
       return res.status(403).json({ message: 'غير مصرح' });
     }
 
@@ -372,13 +451,12 @@ router.post('/:id/markRead', auth, async (req, res) => {
 
     const io = req.app.get('io');
     io.to(`order_${req.params.id}`).emit('messagesUpdated', order.messages);
-
-    // تحديث unreadCount للجميع
     await broadcastUnreadUpdate(req.params.id, io);
 
     const populatedOrder = await Order.findById(order._id)
       .populate({ path: 'product', populate: { path: 'vendor', select: 'name' } })
-      .populate('user', 'name phone');
+      .populate('user', 'name phone')
+      .lean();
 
     res.json({ message: 'تم تحديث القراءة', order: populatedOrder });
   } catch (err) {

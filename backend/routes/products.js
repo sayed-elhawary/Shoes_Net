@@ -1,3 +1,4 @@
+// backend/routes/products.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -31,7 +32,7 @@ const upload = multer({
       cb(new Error('الصور والفيديوهات فقط مسموح بها!'));
     }
   },
-  limits: { fileSize: 50 * 1024 * 1024 }, // زيادة الحد إلى 50 ميجابايت
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 // معالجة أخطاء Multer
@@ -45,10 +46,9 @@ const handleMulterError = (err, req, res, next) => {
   next(err);
 };
 
-// تطبيق معالجة الأخطاء على جميع المسارات التي تستخدم multer
 router.use(handleMulterError);
 
-// عرض جميع المنتجات الموافق عليها (للزوار)
+// === عرض جميع المنتجات الموافق عليها (للزوار) ===
 router.get('/', async (req, res) => {
   try {
     const products = await Product.find({ approved: true }).populate('vendor', 'name');
@@ -58,7 +58,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// جلب جميع المنتجات (للأدمن فقط)
+// === جلب جميع المنتجات (للأدمن فقط) ===
 router.get('/all-products', auth, isAdmin, async (req, res) => {
   try {
     const products = await Product.find({}).populate('vendor', 'name');
@@ -68,7 +68,7 @@ router.get('/all-products', auth, isAdmin, async (req, res) => {
   }
 });
 
-// جلب منتجات تاجر معين (للزوار)
+// === جلب منتجات تاجر معين (للزوار) ===
 router.get('/vendor/:vendorId', async (req, res) => {
   try {
     const products = await Product.find({ vendor: req.params.vendorId, approved: true }).populate('vendor', 'name');
@@ -78,7 +78,7 @@ router.get('/vendor/:vendorId', async (req, res) => {
   }
 });
 
-// جلب منتجات التاجر الخاصة (للتاجر نفسه)
+// === جلب منتجات التاجر الخاصة (للتاجر نفسه) ===
 router.get('/my-products', auth, isVendor, async (req, res) => {
   try {
     const products = await Product.find({ vendor: req.user.id }).populate('vendor', 'name');
@@ -88,143 +88,177 @@ router.get('/my-products', auth, isVendor, async (req, res) => {
   }
 });
 
-// إضافة منتج (للتاجر)
+// === إضافة منتج (للتاجر) - يحتاج موافقة الأدمن ===
 router.post('/', auth, isVendor, upload.fields([{ name: 'images', maxCount: 5 }, { name: 'videos', maxCount: 3 }]), async (req, res) => {
   try {
     const { name, type, price, quantityPerCarton, manufacturer, description } = req.body;
     const images = req.files['images'] ? req.files['images'].map(file => file.filename) : [];
     const videos = req.files['videos'] ? req.files['videos'].map(file => file.filename) : [];
 
-    // Validate: If videos are uploaded, at least one image is required
     if (videos.length > 0 && images.length === 0) {
       return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل عند رفع فيديو' });
     }
 
     const product = new Product({
-      name,
-      type,
-      price,
-      quantityPerCarton,
-      manufacturer,
-      description,
-      images,
-      videos,
-      vendor: req.user.id,
+      name, type, price, quantityPerCarton, manufacturer, description,
+      images, videos, vendor: req.user.id,
+      approved: false
     });
+
     await product.save();
-    res.status(201).json(product);
+    const populatedProduct = await product.populate('vendor', 'name');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('admin_notifications').emit('newPendingProduct', populatedProduct);
+    }
+
+    res.status(201).json(populatedProduct);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// الموافقة على منتج (للأدمن)
+// === الموافقة على منتج (للأدمن) ===
 router.put('/:id/approve', auth, isAdmin, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, { approved: true }, { new: true });
-    if (!product) {
-      return res.status(404).json({ message: 'المنتج غير موجود' });
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { approved: true },
+      { new: true }
+    ).populate('vendor', 'name');
+
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('public_products').emit('productUpdated', product);
+      io.to(`vendor_${product.vendor._id}`).emit('productApproved', product);
     }
+
     res.json(product);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// تعديل منتج
+// === إلغاء الموافقة على منتج (للأدمن) - جديد
+router.put('/:id/unapprove', auth, isAdmin, async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { approved: false },
+      { new: true }
+    ).populate('vendor', 'name');
+
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('public_products').emit('productDeleted', { _id: product._id }); // يُزال من العرض العام
+      io.to(`vendor_${product.vendor._id}`).emit('productUnapproved', product);
+      io.to('admin_notifications').emit('productReturnedToPending', product);
+    }
+
+    res.json(product);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// === تعديل منتج مع رفع صور/فيديو ===
 router.put('/:id', auth, isVendor, upload.fields([{ name: 'images', maxCount: 5 }, { name: 'videos', maxCount: 3 }]), async (req, res) => {
   try {
     const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
-    if (!product) {
-      return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك تعديله' });
-    }
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك تعديله' });
 
     const images = req.files['images'] ? req.files['images'].map(file => file.filename) : [];
     const videos = req.files['videos'] ? req.files['videos'].map(file => file.filename) : [];
 
-    // Validate: If videos are uploaded, at least one image is required
     if (videos.length > 0 && images.length === 0 && product.images.length === 0) {
       return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل عند رفع فيديو' });
     }
 
-    // Delete old files if new ones are uploaded
     if (req.files['images'] && product.images.length > 0) {
       product.images.forEach(file => {
-        try {
-          const filePath = path.join(__dirname, '../Uploads', file);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        } catch (err) {
-          console.error(`خطأ في حذف الصورة القديمة ${file}:`, err);
-        }
+        const filePath = path.join(__dirname, '../Uploads', file);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       });
     }
     if (req.files['videos'] && product.videos.length > 0) {
       product.videos.forEach(file => {
-        try {
-          const filePath = path.join(__dirname, '../Uploads', file);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        } catch (err) {
-          console.error(`خطأ في حذف الفيديو القديم ${file}:`, err);
-        }
+        const filePath = path.join(__dirname, '../Uploads', file);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       });
     }
 
     const updateData = { ...req.body };
-    if (req.files['images']) {
-      updateData.images = req.files['images'].map(file => file.filename);
-    } else {
-      updateData.images = product.images; // Retain existing images if none uploaded
-    }
-    if (req.files['videos']) {
-      updateData.videos = req.files['videos'].map(file => file.filename);
-    } else {
-      updateData.videos = product.videos; // Retain existing videos if none uploaded
-    }
+    updateData.images = req.files['images'] ? images : product.images;
+    updateData.videos = req.files['videos'] ? videos : product.videos;
 
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: req.params.id, vendor: req.user.id },
       updateData,
       { new: true }
-    );
+    ).populate('vendor', 'name');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('public_products').emit('productUpdated', updatedProduct);
+    }
+
     res.json(updatedProduct);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// حذف منتج
-router.delete('/:id', auth, isVendor, async (req, res) => {
+// === تحديث المنتج بدون رفع ملفات (لإعادة العرض كجديد) ===
+router.put('/:id/update', auth, isVendor, async (req, res) => {
   try {
     const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
     if (!product) {
-      return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك حذفه' });
+      return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك تعديله' });
     }
-    // حذف الصور والفيديوهات المرتبطة
+
+    product.updatedAt = new Date();
+    await product.save();
+    const populatedProduct = await product.populate('vendor', 'name');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('public_products').emit('productUpdated', populatedProduct);
+    }
+
+    res.json(populatedProduct);
+  } catch (err) {
+    console.error('Error in /:id/update:', err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// === حذف منتج ===
+router.delete('/:id', auth, isVendor, async (req, res) => {
+  try {
+    const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك حذفه' });
+
     product.images.forEach(file => {
-      try {
-        const filePath = path.join(__dirname, '../Uploads', file);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (err) {
-        console.error(`خطأ في حذف الصورة ${file}:`, err);
-      }
+      const filePath = path.join(__dirname, '../Uploads', file);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
     product.videos.forEach(file => {
-      try {
-        const filePath = path.join(__dirname, '../Uploads', file);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (err) {
-        console.error(`خطأ في حذف الفيديو ${file}:`, err);
-      }
+      const filePath = path.join(__dirname, '../Uploads', file);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
+
     await Product.deleteOne({ _id: req.params.id });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('public_products').emit('productDeleted', { _id: req.params.id });
+    }
+
     res.json({ message: 'تم حذف المنتج بنجاح' });
   } catch (err) {
     res.status(400).json({ message: err.message });

@@ -1,3 +1,4 @@
+// frontend/src/pages/Orders.js
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +33,6 @@ const Orders = () => {
   // Refs
   const socketRef = useRef(null);
   const currentOrderIdRef = useRef(null);
-  const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   // Image preview effect
@@ -50,7 +50,9 @@ const Orders = () => {
 
   // Scroll to bottom ONLY when sending a message
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   // Socket authentication & connection management
@@ -151,7 +153,7 @@ const Orders = () => {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Messages modal socket handling (NO AUTO SCROLL)
+  // Messages modal socket handling (NO AUTO SCROLL ON OPEN)
   useEffect(() => {
     if (!selectedOrderForMessages || !socketRef.current) {
       if (currentOrderIdRef.current && socketRef.current) {
@@ -164,7 +166,6 @@ const Orders = () => {
     currentOrderIdRef.current = orderId;
     socketRef.current.emit('joinOrder', orderId);
     const token = localStorage.getItem('token');
-
     // Mark as read
     axios
       .post(
@@ -183,11 +184,9 @@ const Orders = () => {
           messages: res.data.order.messages || [],
           unreadCount: 0,
         }));
-        // NO SCROLL HERE
       })
       .catch(err => {
         console.error('Mark read error:', err);
-	     // setError('خطأ في تحديث حالة القراءة');
       });
 
     const handleNewMessage = (message) => {
@@ -209,7 +208,6 @@ const Orders = () => {
           )
         );
       }
-      // NO SCROLL ON RECEIVING MESSAGE
     };
 
     const handleMessagesUpdated = (data) => {
@@ -219,7 +217,6 @@ const Orders = () => {
         messages: data.messages || [],
         unreadCount: data.messages.filter(msg => !msg.isRead && msg.from !== getUserRole()).length,
       }));
-      // NO SCROLL
     };
 
     const handleUnreadUpdate = ({ orderId: updatedId, unreadCount }) => {
@@ -235,8 +232,6 @@ const Orders = () => {
     socket.on('newMessage', handleNewMessage);
     socket.on('messagesUpdated', handleMessagesUpdated);
     socket.on('unreadUpdate', handleUnreadUpdate);
-
-    // NO INITIAL SCROLL
 
     return () => {
       socket.off('newMessage', handleNewMessage);
@@ -600,11 +595,7 @@ const Orders = () => {
       setNewImage(null);
       setNewImagePreview(null);
       setError(null);
-
-      // ONLY SCROLL WHEN SENDING MESSAGE
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      scrollToBottom(); // فقط عند الإرسال
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'خطأ في إرسال الرسالة';
       setError(errorMessage);
@@ -646,6 +637,7 @@ const Orders = () => {
   // Display orders
   const rawDisplayOrders = showUnreadOnly ? orders.filter(o => (o.unreadCount || 0) > 0) : orders;
   const displayOrders = groupOrders(rawDisplayOrders, userRole);
+  const totalUnread = orders.reduce((acc, o) => acc + (o.unreadCount || 0), 0);
 
   // Animation variants
   const tableVariants = {
@@ -661,7 +653,7 @@ const Orders = () => {
     visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
   };
   const buttonVariants = {
-    hover: { scale: 1.05, boxShadow: '0 8px 16px rgba(255,0,0,0.3)' },
+    hover: { scale: 1.05, boxShadow: '0 8px 16px rgba(139, 92, 246, 0.3)' },
     tap: { scale: 0.95 },
   };
   const modalVariants = {
@@ -678,7 +670,7 @@ const Orders = () => {
       transition={{ duration: 0.5 }}
     >
       {/* Header */}
-      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-red-700 drop-shadow-lg">
+      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-purple-600 drop-shadow-lg">
         قائمة الطلبات
       </h1>
 
@@ -710,33 +702,33 @@ const Orders = () => {
               placeholder="ابحث باسم التاجر"
               value={vendorSearch}
               onChange={(e) => setVendorSearch(e.target.value)}
-              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
             />
             <input
               type="text"
               placeholder="ابحث برقم الهاتف"
               value={phoneSearch}
               onChange={(e) => setPhoneSearch(e.target.value)}
-              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
             />
             <input
               type="text"
               placeholder="ابحث برقم الطلب"
               value={orderNumberSearch}
               onChange={(e) => setOrderNumberSearch(e.target.value)}
-              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
             />
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
             />
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
             />
           </div>
           <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -747,7 +739,7 @@ const Orders = () => {
                   type="checkbox"
                   checked={statusFilters[status]}
                   onChange={(e) => setStatusFilters(prev => ({ ...prev, [status]: e.target.checked }))}
-                  className="w-5 h-5 text-red-600 rounded focus:ring-red-500 accent-red-600"
+                  className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 accent-purple-600"
                 />
                 <span className="text-white">
                   {status === 'rejected' ? 'مرفوض' : status === 'shipped' ? 'جاري الشحن' : 'تم التسليم'}
@@ -759,7 +751,7 @@ const Orders = () => {
                 type="checkbox"
                 checked={showUnreadOnly}
                 onChange={(e) => setShowUnreadOnly(e.target.checked)}
-                className="w-5 h-5 text-red-600 rounded focus:ring-red-500 accent-red-600"
+                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 accent-purple-600"
               />
               <span className="text-white">الطلبات التي بها رسائل غير مقروءة فقط</span>
             </label>
@@ -767,7 +759,7 @@ const Orders = () => {
           <div className="flex flex-wrap gap-4">
             <motion.button
               onClick={fetchOrders}
-              className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg"
+              className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl text-lg"
               variants={buttonVariants}
               whileHover="hover"
               whileTap="tap"
@@ -776,7 +768,7 @@ const Orders = () => {
             </motion.button>
             <motion.button
               onClick={exportToWord}
-              className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg"
+              className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl text-lg"
               variants={buttonVariants}
               whileHover="hover"
               whileTap="tap"
@@ -888,16 +880,23 @@ const Orders = () => {
                     <td className="py-4 px-6 text-center">
                       <motion.button
                         onClick={() => openMessages(order)}
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-lg text-lg ${
+                        className={`relative w-12 h-12 rounded-full flex items-center justify-center text-purple-400 font-bold shadow-lg text-lg bg-gradient-to-r ${
                           order.unreadCount > 0
-                            ? 'bg-gradient-to-r from-red-600 to-red-800 animate-pulse'
-                            : 'bg-gradient-to-r from-gray-600 to-gray-800'
+                            ? 'from-red-600 to-red-800 animate-pulse'
+                            : 'from-gray-600 to-gray-800'
                         }`}
                         variants={buttonVariants}
                         whileHover="hover"
                         whileTap="tap"
                       >
-                        {order.unreadCount > 0 ? order.unreadCount : 0}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        {order.unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-bounce">
+                            {order.unreadCount > 99 ? '99+' : order.unreadCount}
+                          </span>
+                        )}
                       </motion.button>
                     </td>
                     <td className="py-4 px-6">
@@ -928,7 +927,7 @@ const Orders = () => {
                           <motion.select
                             value={order.status}
                             onChange={(e) => handleUpdateStatus(order._id, e.target.value)}
-                            className="p-3 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                            className="p-3 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                             variants={buttonVariants}
                             whileHover="hover"
                           >
@@ -976,7 +975,7 @@ const Orders = () => {
           <motion.button
             onClick={() => setPage(prev => Math.max(1, prev - 1))}
             disabled={page === 1}
-            className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg"
+            className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg"
             variants={buttonVariants}
             whileHover={page !== 1 ? "hover" : {}}
             whileTap={page !== 1 ? "tap" : {}}
@@ -989,7 +988,7 @@ const Orders = () => {
           <motion.button
             onClick={() => setPage(prev => prev + 1)}
             disabled={page * limit >= total}
-            className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg"
+            className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg"
             variants={buttonVariants}
             whileHover={page * limit < total ? "hover" : {}}
             whileTap={page * limit < total ? "tap" : {}}
@@ -997,6 +996,28 @@ const Orders = () => {
             التالي
           </motion.button>
         </div>
+      )}
+
+      {/* Floating Button مع إشعار */}
+      {(userRole === 'customer' || userRole === 'vendor') && totalUnread > 0 && (
+        <motion.div
+          className="fixed bottom-6 right-6 z-50"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 300 }}
+        >
+          <button
+            onClick={() => openMessages(displayOrders.find(o => o.unreadCount > 0) || displayOrders[0])}
+            className="relative w-16 h-16 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full shadow-2xl flex items-center justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center animate-pulse">
+              {totalUnread > 99 ? '99+' : totalUnread}
+            </span>
+          </button>
+        </motion.div>
       )}
 
       {/* Edit Modal */}
@@ -1008,13 +1029,13 @@ const Orders = () => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            onClick={() => setEditOrder(null)}
+            onClick={(e) => e.stopPropagation()}
           >
             <motion.div
               className="bg-[#242526] p-8 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-md"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-3xl font-bold mb-8 text-right bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-red-700">
+              <h2 className="text-3xl font-bold mb-8 text-right bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-purple-700">
                 تعديل الطلب
               </h2>
               <div className="space-y-6">
@@ -1023,7 +1044,7 @@ const Orders = () => {
                   placeholder="الكمية"
                   value={editForm.quantity}
                   onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })}
-                  className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right text-lg"
+                  className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-right text-lg"
                   min="1"
                 />
                 <input
@@ -1031,7 +1052,7 @@ const Orders = () => {
                   placeholder="العنوان"
                   value={editForm.address}
                   onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                  className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right text-lg"
+                  className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-right text-lg"
                 />
               </div>
               <div className="flex gap-4 mt-8">
@@ -1068,17 +1089,16 @@ const Orders = () => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            onClick={closeMessages}
+            // لا نضيف onClick هنا أبدًا
           >
             <motion.div
               className="bg-[#242526] p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-3xl font-bold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-red-700">
+              <h2 className="text-3xl font-bold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-purple-700">
                 الرسائل للطلب #{selectedOrderForMessages.orderNumber}
               </h2>
               <div
-                ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto mb-6 bg-[#3a3b3c] p-4 rounded-2xl shadow-inner"
               >
                 {selectedOrderForMessages.messages && selectedOrderForMessages.messages.length > 0 ? (
@@ -1093,7 +1113,7 @@ const Orders = () => {
                         >
                           <div
                             className={`max-w-xs sm:max-w-sm p-4 rounded-2xl shadow-md ${
-                              isMyMessage ? 'bg-gradient-to-r from-red-600 to-red-800 text-white' : 'bg-gray-700 text-white'
+                              isMyMessage ? 'bg-gradient-to-r from-purple-600 to-purple-800 text-white' : 'bg-gray-700 text-white'
                             }`}
                           >
                             <p className="font-bold text-sm opacity-90">
@@ -1139,7 +1159,7 @@ const Orders = () => {
                     placeholder="اكتب رسالتك هنا..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right resize-none"
+                    className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-right resize-none"
                     rows="4"
                   />
                   <div className="flex items-center gap-4">
@@ -1147,7 +1167,7 @@ const Orders = () => {
                       type="file"
                       accept="image/*"
                       onChange={(e) => setNewImage(e.target.files[0] || null)}
-                      className="text-sm text-gray-300 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-red-600 file:text-white hover:file:bg-red-700"
+                      className="text-sm text-gray-300 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700"
                     />
                     {newImagePreview && (
                       <div className="relative">
@@ -1167,7 +1187,7 @@ const Orders = () => {
                   </div>
                   <motion.button
                     type="submit"
-                    className="w-full py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg"
+                    className="w-full py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl text-lg"
                     variants={buttonVariants}
                     whileHover="hover"
                     whileTap="tap"
@@ -1177,7 +1197,10 @@ const Orders = () => {
                 </form>
               )}
               <motion.button
-                onClick={closeMessages}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMessages();
+                }}
                 className="w-full mt-4 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-gray-700 to-gray-900 shadow-xl text-lg"
                 variants={buttonVariants}
                 whileHover="hover"

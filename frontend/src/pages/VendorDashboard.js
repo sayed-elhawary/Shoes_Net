@@ -1,22 +1,24 @@
 // frontend/src/pages/VendorDashboard.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import { X, Upload, Image as ImageIcon, Video, FileVideo } from 'lucide-react';
 
 const VendorDashboard = () => {
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState({
     name: '', type: '', price: '', quantityPerCarton: '', manufacturer: '', description: ''
   });
-  const [images, setImages] = useState([]);
-  const [videos, setVideos] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]); // جميع الملفات (صور + فيديو)
+  const [previewFiles, setPreviewFiles] = useState([]); // للعرض المسبق
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const fileInputRef = useRef(null);
 
-  // === جلب المنتجات ===
-  useEffect(() => {
+  // === جلب المنتجات (يتحدث تلقائيًا بعد أي تغيير) ===
+  const fetchProducts = () => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
     if (!token || !userId) {
@@ -28,20 +30,28 @@ const VendorDashboard = () => {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => {
-        setProducts(res.data.filter(p => {
+        const filtered = res.data.filter(p => {
           if (p.vendor) {
             return typeof p.vendor === 'object' ? p.vendor._id === userId : p.vendor === userId;
           }
           return false;
-        }));
-        showToast('تم تحميل المنتجات بنجاح', 'success');
+        });
+        // ترتيب تنازلي حسب التعديث (الأحدث فوق)
+        const sorted = filtered.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        setProducts(sorted);
+        showToast('تم تحديث المنتجات بنجاح', 'success');
       })
       .catch(err => {
         console.error('خطأ في جلب المنتجات:', err);
         showToast('فشل جلب المنتجات', 'error');
       })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  // === جلب المنتجات عند التحميل + بعد أي تغيير ===
+  useEffect(() => {
+    fetchProducts();
+  }, []); // أول مرة
 
   // === إضافة منتج ===
   const handleAddProduct = () => {
@@ -49,23 +59,28 @@ const VendorDashboard = () => {
       showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
       return;
     }
-    if (videos.length > 0 && images.length === 0) {
+    if (selectedFiles.length === 0) {
+      showToast('يجب رفع صورة واحدة على الأقل', 'error');
+      return;
+    }
+    const hasImage = selectedFiles.some(f => f.type.startsWith('image/'));
+    const hasVideo = selectedFiles.some(f => f.type.startsWith('video/'));
+    if (hasVideo && !hasImage) {
       showToast('يجب رفع صورة واحدة على الأقل عند رفع فيديو', 'error');
       return;
     }
     const formData = new FormData();
     Object.keys(form).forEach(key => formData.append(key, form[key]));
-    images.forEach(img => formData.append('images', img));
-    videos.forEach(vid => formData.append('videos', vid));
+    selectedFiles.forEach(file => formData.append('files', file));
     const token = localStorage.getItem('token');
     setLoading(true);
     axios.post(`${process.env.REACT_APP_API_URL}/api/products`, formData, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
     })
       .then(res => {
-        setProducts(prev => [...prev, res.data]);
         showToast('تم إضافة المنتج بنجاح', 'success');
         resetForm();
+        fetchProducts(); // تحديث فوري
       })
       .catch(err => {
         const msg = err.response?.data?.message || 'خطأ في إضافة المنتج';
@@ -76,12 +91,13 @@ const VendorDashboard = () => {
 
   const resetForm = () => {
     setForm({ name: '', type: '', price: '', quantityPerCarton: '', manufacturer: '', description: '' });
-    setImages([]);
-    setVideos([]);
+    setSelectedFiles([]);
+    setPreviewFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleImageChange = (e) => {
-    const files = [...e.target.files];
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
     const maxSize = 50 * 1024 * 1024;
     const validFiles = files.filter(f => {
       if (f.size > maxSize) {
@@ -90,20 +106,22 @@ const VendorDashboard = () => {
       }
       return true;
     });
-    setImages(validFiles);
+    if (validFiles.length + selectedFiles.length > 10) {
+      showToast('حد أقصى 10 ملفات فقط (صور وفيديوهات)', 'error');
+      return;
+    }
+    setSelectedFiles(prev => [...prev, ...validFiles]);
+    const previews = validFiles.map(file => ({
+      url: URL.createObjectURL(file),
+      name: file.name,
+      type: file.type.startsWith('image/') ? 'image' : 'video'
+    }));
+    setPreviewFiles(prev => [...prev, ...previews]);
   };
 
-  const handleVideoChange = (e) => {
-    const files = [...e.target.files];
-    const maxSize = 50 * 1024 * 1024;
-    const validFiles = files.filter(f => {
-      if (f.size > maxSize) {
-        showToast(`الملف ${f.name} كبير جدًا! الحد الأقصى 50 ميجابايت.`, 'error');
-        return false;
-      }
-      return true;
-    });
-    setVideos(validFiles);
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleDelete = (id) => {
@@ -114,14 +132,14 @@ const VendorDashboard = () => {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(() => {
-        setProducts(prev => prev.filter(p => p._id !== id));
         showToast('تم حذف المنتج بنجاح', 'success');
+        fetchProducts(); // تحديث فوري
       })
       .catch(err => showToast('خطأ في حذف المنتج: ' + err.message, 'error'))
       .finally(() => setLoading(false));
   };
 
-  // === تحديث المنتج بدون رفع ملفات (استخدام /update) ===
+  // === تحديث المنتج بدون رفع ملفات ===
   const handleUpdateProduct = () => {
     if (!editingProduct.name || !editingProduct.type || !editingProduct.price || !editingProduct.quantityPerCarton || !editingProduct.manufacturer) {
       showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
@@ -129,15 +147,13 @@ const VendorDashboard = () => {
     }
     const token = localStorage.getItem('token');
     setLoading(true);
-
-    // استخدم /update بدل /:id
     axios.put(`${process.env.REACT_APP_API_URL}/api/products/${editingProduct._id}/update`, editingProduct, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => {
-        setProducts(prev => prev.map(p => p._id === res.data._id ? res.data : p));
         showToast('تم تحديث المنتج وإعادة عرضه كجديد بنجاح', 'success');
         setEditingProduct(null);
+        fetchProducts(); // تحديث فوري
       })
       .catch(err => {
         const msg = err.response?.data?.message || 'فشل التحديث';
@@ -146,7 +162,7 @@ const VendorDashboard = () => {
       .finally(() => setLoading(false));
   };
 
-  const openMedia = (media, type) => setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/uploads/${media}`, type });
+  const openMedia = (media, type) => setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/Uploads/${media}`, type });
   const closeMedia = () => setSelectedMedia(null);
 
   const showToast = (message, type) => {
@@ -164,7 +180,6 @@ const VendorDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
-      {/* خلفية موف ناعمة */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700" />
@@ -194,7 +209,7 @@ const VendorDashboard = () => {
           )}
         </AnimatePresence>
 
-        {/* === نموذج الإضافة === */}
+        {/* === نموذج إضافة منتج === */}
         <motion.div className="bg-[#242526]/80 backdrop-blur-xl p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-700/50 mb-10" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
@@ -223,9 +238,46 @@ const VendorDashboard = () => {
               <option value="حريمي">حريمي</option>
               <option value="أطفال">أطفال</option>
             </select>
-            <input type="file" multiple accept="image/*" onChange={handleImageChange} className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 transition" />
-            <input type="file" multiple accept="video/*" onChange={handleVideoChange} className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 transition" />
           </div>
+
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              <Upload className="inline w-5 h-5 ml-2" />
+              رفع صور وفيديوهات (حد أقصى 10 ملفات - صورة واحدة على الأقل)
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 transition"
+            />
+          </div>
+
+          {previewFiles.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {previewFiles.map((file, index) => (
+                <div key={index} className="relative group">
+                  {file.type === 'image' ? (
+                    <img src={file.url} alt="" className="w-full h-32 object-cover rounded-lg border border-purple-500" />
+                  ) : (
+                    <video src={file.url} className="w-full h-32 object-cover rounded-lg border border-purple-500" />
+                  )}
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="absolute top-2 right-2 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-1 rounded text-xs">
+                    {file.type === 'image' ? <ImageIcon className="w-4 h-4 inline" /> : <FileVideo className="w-4 h-4 inline" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-3 mt-6">
             <motion.button onClick={handleAddProduct} disabled={loading} className="flex-1 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg disabled:opacity-70 transition" variants={buttonVariants} whileHover="hover" whileTap="tap">
               {loading ? <span className="flex items-center justify-center gap-2"><motion.div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} /> جارٍ الإضافة...</span> : 'إضافة منتج'}
@@ -236,7 +288,7 @@ const VendorDashboard = () => {
           </div>
         </motion.div>
 
-        {/* === المنتجات === */}
+        {/* === قائمة المنتجات === */}
         {loading ? (
           <div className="flex justify-center py-20">
             <motion.div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} />
@@ -262,11 +314,18 @@ const VendorDashboard = () => {
                 >
                   <div className="p-4">
                     {product.images?.[0] ? (
-                      <img src={`${process.env.REACT_APP_API_URL}/uploads/${product.images[0]}`} alt={product.name} className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-90 transition" onClick={() => openMedia(product.images[0], 'image')} onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; }} />
+                      <img 
+                        src={`${process.env.REACT_APP_API_URL}/Uploads/${product.images[0]}`} 
+                        alt={product.name} 
+                        className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-90 transition" 
+                        onClick={() => openMedia(product.images[0], 'image')} 
+                        onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`; }} 
+                      />
                     ) : (
-                      <img src={`${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`} alt="بديل" className="w-full h-48 object-cover rounded-xl" />
+                      <img src={`${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`} alt="بديل" className="w-full h-48 object-cover rounded-xl" />
                     )}
                   </div>
+
                   <div className="p-5 space-y-2 text-right border-t border-gray-700">
                     <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">{product.name}</h3>
                     <p className="text-sm text-gray-300">الحالة: <span className={product.approved ? 'text-green-400' : 'text-yellow-400'}>{product.approved ? 'موافق' : 'في الانتظار'}</span></p>
@@ -275,14 +334,28 @@ const VendorDashboard = () => {
                     <p className="text-sm text-gray-300">الكمية: {product.quantityPerCarton} جوز</p>
                     <p className="text-sm text-gray-300">المصنع: {product.manufacturer}</p>
                     <p className="text-sm text-gray-300 line-clamp-2">الوصف: {product.description || 'لا يوجد'}</p>
+
                     <div className="flex flex-wrap gap-2 mt-3 justify-end">
                       {product.images?.map((img, i) => (
-                        <img key={i} src={`${process.env.REACT_APP_API_URL}/uploads/${img}`} alt="" className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-purple-500 transition" onClick={() => openMedia(img, 'image')} onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`; }} />
+                        <img 
+                          key={i} 
+                          src={`${process.env.REACT_APP_API_URL}/Uploads/${img}`} 
+                          alt="" 
+                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-purple-500 transition" 
+                          onClick={() => openMedia(img, 'image')} 
+                          onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`; }} 
+                        />
                       ))}
                       {product.videos?.map((vid, i) => (
-                        <video key={i} src={`${process.env.REACT_APP_API_URL}/uploads/${vid}`} className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-purple-500 transition" onClick={() => openMedia(vid, 'video')} />
+                        <video 
+                          key={i} 
+                          src={`${process.env.REACT_APP_API_URL}/Uploads/${vid}`} 
+                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-purple-500 transition" 
+                          onClick={() => openMedia(vid, 'video')} 
+                        />
                       ))}
                     </div>
+
                     <div className="flex gap-2 mt-4">
                       <motion.button
                         onClick={() => setEditingProduct(product)}

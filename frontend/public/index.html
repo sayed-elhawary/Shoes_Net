@@ -2,12 +2,43 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="theme-color" content="#6b46c1" />
     <meta name="description" content="موقع لعرض المنتجات وإدارة التجار والطلبات" />
-    <title>موقع المنتجات</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+
+    <!-- Apple Touch Icon (للشاشة الرئيسية في iOS) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon.png" />
+
+    <!-- Android / PWA Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon.png" />
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Web-Shose" />
+    <meta property="og:description" content="موقع لعرض المنتجات وإدارة التجار والطلبات" />
+    <meta property="og:image" content="/icon.png" />
+    <meta property="og:url" content="https://yourdomain.com" />
+    <meta property="og:type" content="website" />
+
+    <title>Web-Shose | أحذية بالجملة</title>
+
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/favicon.ico" as="image" />
   </head>
   <body>
-    <noscript>تحتاج إلى تفعيل JavaScript لتشغيل هذا التطبيق.</noscript>
+    <noscript>
+      <div style="text-align: center; padding: 2rem; font-family: Arial, sans-serif; color: #fff; background: #18191a;">
+        <h2>تحتاج إلى تفعيل JavaScript</h2>
+        <p>هذا التطبيق يتطلب JavaScript ليعمل بشكل صحيح.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
   </body>
 </html>

@@ -9,6 +9,7 @@ const auth = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
 const isVendor = require('../middleware/isVendor');
 
+// === إعداد Multer ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = 'Uploads/';
@@ -17,38 +18,46 @@ const storage = multer.diskStorage({
     }
     cb(null, dir);
   },
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+    cb(null, uniqueName);
+  },
 });
 
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|mp4/;
+    const filetypes = /jpeg|jpg|png|gif|webp|mp4|mov|avi|mkv|webm/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = filetypes.test(file.mimetype);
     if (extname && mimetype) {
-      cb(null, true);
-    } else {
-      cb(new Error('الصور والفيديوهات فقط مسموح بها!'));
+      return cb(null, true);
     }
+    cb(new Error('نوع الملف غير مدعوم! مسموح: صور وفيديوهات فقط'));
   },
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 50MB
 });
 
-// معالجة أخطاء Multer
-const handleMulterError = (err, req, res, next) => {
+// === معالج أخطاء Multer (مهم جداً يكون بعد الروتس مش قبلهم) ===
+const multerErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'حجم الملف كبير جدًا! الحد الأقصى هو 50 ميجابايت.' });
+      return res.status(400).json({ message: 'حجم الملف كبير جداً! الحد الأقصى 50 ميجابايت' });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ message: 'تم رفع أكثر من 10 ملفات!' });
     }
     return res.status(400).json({ message: err.message });
   }
-  next(err);
+  if (err) {
+    return res.status(400).json({ message: err.message });
+  }
+  next();
 };
 
-router.use(handleMulterError);
+// === الروتس ===
 
-// === عرض جميع المنتجات الموافق عليها (للزوار) ===
+// عرض المنتجات العامة
 router.get('/', async (req, res) => {
   try {
     const products = await Product.find({ approved: true }).populate('vendor', 'name');
@@ -58,7 +67,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// === جلب جميع المنتجات (للأدمن فقط) ===
 router.get('/all-products', auth, isAdmin, async (req, res) => {
   try {
     const products = await Product.find({}).populate('vendor', 'name');
@@ -68,7 +76,6 @@ router.get('/all-products', auth, isAdmin, async (req, res) => {
   }
 });
 
-// === جلب منتجات تاجر معين (للزوار) ===
 router.get('/vendor/:vendorId', async (req, res) => {
   try {
     const products = await Product.find({ vendor: req.params.vendorId, approved: true }).populate('vendor', 'name');
@@ -78,7 +85,6 @@ router.get('/vendor/:vendorId', async (req, res) => {
   }
 });
 
-// === جلب منتجات التاجر الخاصة (للتاجر نفسه) ===
 router.get('/my-products', auth, isVendor, async (req, res) => {
   try {
     const products = await Product.find({ vendor: req.user.id }).populate('vendor', 'name');
@@ -88,181 +94,168 @@ router.get('/my-products', auth, isVendor, async (req, res) => {
   }
 });
 
-// === إضافة منتج (للتاجر) - يحتاج موافقة الأدمن ===
-router.post('/', auth, isVendor, upload.fields([{ name: 'images', maxCount: 5 }, { name: 'videos', maxCount: 3 }]), async (req, res) => {
+// === إضافة منتج ===
+router.post('/', auth, isVendor, upload.array('files', 10), async (req, res) => {
   try {
     const { name, type, price, quantityPerCarton, manufacturer, description } = req.body;
-    const images = req.files['images'] ? req.files['images'].map(file => file.filename) : [];
-    const videos = req.files['videos'] ? req.files['videos'].map(file => file.filename) : [];
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل' });
+    }
+
+    const images = [];
+    const videos = [];
+
+    req.files.forEach(file => {
+      if (file.mimetype.startsWith('image/')) images.push(file.filename);
+      if (file.mimetype.startsWith('video/')) videos.push(file.filename);
+    });
 
     if (videos.length > 0 && images.length === 0) {
+      req.files.forEach(f => fs.unlinkSync(path.join(__dirname, '../Uploads', f.filename)));
       return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل عند رفع فيديو' });
     }
 
     const product = new Product({
-      name, type, price, quantityPerCarton, manufacturer, description,
-      images, videos, vendor: req.user.id,
-      approved: false
+      name, type, price: Number(price), quantityPerCarton: Number(quantityPerCarton),
+      manufacturer, description, images, videos, vendor: req.user.id, approved: false
     });
 
     await product.save();
-    const populatedProduct = await product.populate('vendor', 'name');
+    const populated = await product.populate('vendor', 'name');
 
     const io = req.app.get('io');
-    if (io) {
-      io.to('admin_notifications').emit('newPendingProduct', populatedProduct);
+    if (io) io.to('admin_notifications').emit('newPendingProduct', populated);
+
+    res.status(201).json(populated);
+  } catch (err) {
+    if (req.files) {
+      req.files.forEach(f => {
+        const p = path.join(__dirname, '../Uploads', f.filename);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      });
+    }
+    console.error('Add product error:', err);
+    res.status(400).json({ message: err.message || 'فشل إضافة المنتج' });
+  }
+});
+
+// === تعديل مع رفع ملفات جديدة ===
+router.put('/:id', auth, isVendor, upload.array('files', 10), async (req, res) => {
+  try {
+    const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
+
+    let images = product.images;
+    let videos = product.videos;
+
+    if (req.files && req.files.length > 0) {
+      images = [];
+      videos = [];
+      req.files.forEach(file => {
+        if (file.mimetype.startsWith('image/')) images.push(file.filename);
+        if (file.mimetype.startsWith('video/')) videos.push(file.filename);
+      });
     }
 
-    res.status(201).json(populatedProduct);
+    if (videos.length > 0 && images.length === 0) {
+      if (req.files) req.files.forEach(f => fs.unlinkSync(path.join(__dirname, '../Uploads', f.filename)));
+      return res.status(400).json({ message: 'يجب رفع صورة واحدة عند رفع فيديو' });
+    }
+
+    // حذف القديم
+    [...product.images, ...product.videos].forEach(f => {
+      const p = path.join(__dirname, '../Uploads', f);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
+
+    const updated = await Product.findOneAndUpdate(
+      { _id: req.params.id, vendor: req.user.id },
+      { ...req.body, images, videos },
+      { new: true }
+    ).populate('vendor', 'name');
+
+    const io = req.app.get('io');
+    if (io) io.to('public_products').emit('productUpdated', updated);
+
+    res.json(updated);
   } catch (err) {
+    if (req.files) {
+      req.files.forEach(f => {
+        const p = path.join(__dirname, '../Uploads', f.filename);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      });
+    }
     res.status(400).json({ message: err.message });
   }
 });
 
-// === الموافقة على منتج (للأدمن) ===
-router.put('/:id/approve', auth, isAdmin, async (req, res) => {
+// === تحديث بدون ملفات ===
+router.put('/:id/update', auth, isVendor, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { approved: true },
+    const product = await Product.findOneAndUpdate(
+      { _id: req.params.id, vendor: req.user.id },
+      { updatedAt: new Date() },
       { new: true }
     ).populate('vendor', 'name');
 
     if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
 
+    const io = req.app.get('io');
+    if (io) io.to('public_products').emit('productUpdated', product);
+
+    res.json(product);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// === موافقة / إلغاء / حذف ===
+router.put('/:id/approve', auth, isAdmin, async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(req.params.id, { approved: true }, { new: true }).populate('vendor', 'name');
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
     const io = req.app.get('io');
     if (io) {
       io.to('public_products').emit('productUpdated', product);
       io.to(`vendor_${product.vendor._id}`).emit('productApproved', product);
     }
-
     res.json(product);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
+  } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-// === إلغاء الموافقة على منتج (للأدمن) - جديد
 router.put('/:id/unapprove', auth, isAdmin, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { approved: false },
-      { new: true }
-    ).populate('vendor', 'name');
-
+    const product = await Product.findByIdAndUpdate(req.params.id, { approved: false }, { new: true }).populate('vendor', 'name');
     if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
-
     const io = req.app.get('io');
     if (io) {
-      io.to('public_products').emit('productDeleted', { _id: product._id }); // يُزال من العرض العام
+      io.to('public_products').emit('productDeleted', { _id: product._id });
       io.to(`vendor_${product.vendor._id}`).emit('productUnapproved', product);
-      io.to('admin_notifications').emit('productReturnedToPending', product);
     }
-
     res.json(product);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
+  } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-// === تعديل منتج مع رفع صور/فيديو ===
-router.put('/:id', auth, isVendor, upload.fields([{ name: 'images', maxCount: 5 }, { name: 'videos', maxCount: 3 }]), async (req, res) => {
-  try {
-    const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
-    if (!product) return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك تعديله' });
-
-    const images = req.files['images'] ? req.files['images'].map(file => file.filename) : [];
-    const videos = req.files['videos'] ? req.files['videos'].map(file => file.filename) : [];
-
-    if (videos.length > 0 && images.length === 0 && product.images.length === 0) {
-      return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل عند رفع فيديو' });
-    }
-
-    if (req.files['images'] && product.images.length > 0) {
-      product.images.forEach(file => {
-        const filePath = path.join(__dirname, '../Uploads', file);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      });
-    }
-    if (req.files['videos'] && product.videos.length > 0) {
-      product.videos.forEach(file => {
-        const filePath = path.join(__dirname, '../Uploads', file);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      });
-    }
-
-    const updateData = { ...req.body };
-    updateData.images = req.files['images'] ? images : product.images;
-    updateData.videos = req.files['videos'] ? videos : product.videos;
-
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: req.params.id, vendor: req.user.id },
-      updateData,
-      { new: true }
-    ).populate('vendor', 'name');
-
-    const io = req.app.get('io');
-    if (io) {
-      io.to('public_products').emit('productUpdated', updatedProduct);
-    }
-
-    res.json(updatedProduct);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// === تحديث المنتج بدون رفع ملفات (لإعادة العرض كجديد) ===
-router.put('/:id/update', auth, isVendor, async (req, res) => {
-  try {
-    const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
-    if (!product) {
-      return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك تعديله' });
-    }
-
-    product.updatedAt = new Date();
-    await product.save();
-    const populatedProduct = await product.populate('vendor', 'name');
-
-    const io = req.app.get('io');
-    if (io) {
-      io.to('public_products').emit('productUpdated', populatedProduct);
-    }
-
-    res.json(populatedProduct);
-  } catch (err) {
-    console.error('Error in /:id/update:', err);
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// === حذف منتج ===
 router.delete('/:id', auth, isVendor, async (req, res) => {
   try {
     const product = await Product.findOne({ _id: req.params.id, vendor: req.user.id });
-    if (!product) return res.status(404).json({ message: 'المنتج غير موجود أو لا يمكنك حذفه' });
+    if (!product) return res.status(404).json({ message: 'المنتج غير موجود' });
 
-    product.images.forEach(file => {
-      const filePath = path.join(__dirname, '../Uploads', file);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    });
-    product.videos.forEach(file => {
-      const filePath = path.join(__dirname, '../Uploads', file);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    [...product.images, ...product.videos].forEach(f => {
+      const p = path.join(__dirname, '../Uploads', f);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
     });
 
     await Product.deleteOne({ _id: req.params.id });
-
     const io = req.app.get('io');
-    if (io) {
-      io.to('public_products').emit('productDeleted', { _id: req.params.id });
-    }
+    if (io) io.to('public_products').emit('productDeleted', { _id: req.params.id });
 
-    res.json({ message: 'تم حذف المنتج بنجاح' });
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
+    res.json({ message: 'تم الحذف بنجاح' });
+  } catch (err) { res.status(400).json({ message: err.message }); }
 });
+
+// === تفعيل معالج الأخطاء بعد كل الروتس ===
+router.use(multerErrorHandler);
 
 module.exports = router;

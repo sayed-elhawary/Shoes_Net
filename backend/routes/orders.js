@@ -44,7 +44,6 @@ const broadcastUnreadUpdate = async (orderId, io) => {
         populate: { path: 'vendor', select: '_id' }
       })
       .lean();
-
     if (!order || !order.user || !order.product?.vendor) return;
 
     const adminRoom = 'admin_room';
@@ -155,14 +154,20 @@ router.get('/', auth, async (req, res) => {
     // === حماية من null في populate ===
     orders = orders.map(order => {
       const safeOrder = { ...order };
-
       safeOrder.user = safeOrder.user || { name: 'زائر', phone: '-', _id: null };
-      safeOrder.product = safeOrder.product || { name: 'غير معروف', vendor: null };
-      safeOrder.product.vendor = safeOrder.product.vendor || { name: 'غير معروف', _id: null };
+
+      // استخدام الحقول المخزنة إذا كان المنتج محذوفاً
+      if (!safeOrder.product) {
+        safeOrder.product = {
+          name: safeOrder.productName || 'غير معروف',
+          vendor: { name: safeOrder.vendorName || 'غير معروف' }
+        };
+      } else {
+        safeOrder.product.vendor = safeOrder.product.vendor || { name: safeOrder.vendorName || 'غير معروف' };
+      }
 
       const unreadCount = calculateUnreadCount(safeOrder.messages, req.user.role);
       safeOrder.unreadCount = unreadCount;
-
       return safeOrder;
     });
 
@@ -173,7 +178,7 @@ router.get('/', auth, async (req, res) => {
       if (vendorIds.length > 0) {
         const products = await Product.find({ vendor: { $in: vendorIds } }).select('_id').lean();
         const productIds = products.map(p => p._id);
-        orders = orders.filter(order => 
+        orders = orders.filter(order =>
           order.product && productIds.some(id => id.equals(order.product._id))
         );
       } else {
@@ -185,21 +190,20 @@ router.get('/', auth, async (req, res) => {
     if (req.user.role === 'vendor') {
       const vendorProducts = await Product.find({ vendor: req.user.id }).select('_id').lean();
       const productIds = vendorProducts.map(p => p._id);
-      orders = orders.filter(order => 
+      orders = orders.filter(order =>
         order.product && productIds.some(id => id.equals(order.product._id))
       );
     }
 
     // === فلتر العميل (للعميل) ===
     if (req.user.role === 'customer') {
-      orders = orders.filter(order => 
+      orders = orders.filter(order =>
         order.user && order.user._id && order.user._id.equals(req.user.id)
       );
     }
 
     // === حساب العدد الكلي بعد الفلاتر ===
     const totalQuery = { ...query };
-
     if (req.user.role === 'admin' && vendorName) {
       const vendors = await Vendor.find({ name: { $regex: vendorName, $options: 'i' } }).select('_id').lean();
       const vendorIds = vendors.map(v => v._id);
@@ -219,7 +223,6 @@ router.get('/', auth, async (req, res) => {
     }
 
     const total = await Order.countDocuments(totalQuery);
-
     console.log(`Fetched ${orders.length} orders, total: ${total}`);
     res.json({ orders, total });
   } catch (err) {
@@ -232,10 +235,10 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   const { product, vendor, quantity, address, selectedImage } = req.body;
   try {
-    const productDoc = await Product.findById(product);
+    const productDoc = await Product.findById(product).populate('vendor', 'name');
     if (!productDoc) return res.status(404).json({ message: 'المنتج غير موجود' });
 
-    if (vendor !== productDoc.vendor.toString()) {
+    if (vendor !== productDoc.vendor._id.toString()) {
       return res.status(400).json({ message: 'التاجر غير صحيح' });
     }
 
@@ -250,6 +253,8 @@ router.post('/', auth, async (req, res) => {
       address,
       status: 'pending',
       selectedImage: selectedImage || 'placeholder-image.jpg',
+      productName: productDoc.name,
+      vendorName: productDoc.vendor.name,
       messages: []
     });
 
@@ -310,6 +315,7 @@ router.put('/:id', auth, async (req, res) => {
     if (req.user.role !== 'customer' || order.user.toString() !== req.user.id) {
       return res.status(403).json({ message: 'غير مصرح' });
     }
+
     if (order.status !== 'pending') {
       return res.status(403).json({ message: 'لا يمكن التعديل' });
     }
@@ -336,30 +342,53 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// === حذف طلب ===
+// ===================================================
+// حذف طلب - آمن 100% - لا يؤثر على المنتج أو صوره
+// ===================================================
 router.delete('/:id', auth, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
 
     const isAdmin = req.user.role === 'admin';
-    const isCustomerPending = req.user.role === 'customer' && 
-                              order.user.toString() === req.user.id && 
+    const isCustomerPending = req.user.role === 'customer' &&
+                              order.user.toString() === req.user.id &&
                               order.status === 'pending';
 
     if (!isAdmin && !isCustomerPending) {
       return res.status(403).json({ message: 'غير مصرح' });
     }
 
+    // === حذف صورة الطلب فقط إذا لم تكن من صور المنتج ===
     if (order.selectedImage && order.selectedImage !== 'placeholder-image.jpg') {
       const imagePath = path.join(__dirname, '..', 'Uploads', order.selectedImage);
-      if (fs.existsSync(imagePath)) {
+
+      // تحقق إذا كانت الصورة موجودة في المنتج
+      const product = await Product.findById(order.product);
+      const isImageInProduct = product && (
+        product.images.includes(order.selectedImage) ||
+        product.videos.includes(order.selectedImage)
+      );
+
+      // لا نحذف الصورة إذا كانت مستخدمة في المنتج
+      if (!isImageInProduct && fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
+        console.log(`تم حذف صورة الطلب: ${order.selectedImage}`);
+      } else if (isImageInProduct) {
+        console.log(`تم تجاهل حذف الصورة لأنها مستخدمة في المنتج: ${order.selectedImage}`);
       }
     }
 
+    // حذف الطلب من قاعدة البيانات فقط
     await Order.findByIdAndDelete(req.params.id);
-    res.json({ message: 'تم الحذف' });
+
+    // إشعار السوكت بحذف الطلب (للتحديث الفوري في الواجهة)
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`order_${req.params.id}`).emit('orderDeleted', { orderId: req.params.id });
+    }
+
+    res.json({ message: 'تم حذف الطلب بنجاح. لم يتم تعديل المنتج أو صوره.' });
   } catch (err) {
     console.error('Delete error:', err);
     res.status(400).json({ message: err.message });
@@ -374,6 +403,7 @@ router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
 
     const { text } = req.body;
     const image = req.file ? req.file.filename : null;
+
     if (!text?.trim() && !image) {
       return res.status(400).json({ message: 'يجب إرسال نص أو صورة' });
     }
@@ -412,7 +442,6 @@ router.post('/:id/message', auth, upload.single('image'), async (req, res) => {
     const room = `order_${req.params.id}`;
     io.to(room).emit('newMessage', messageObj);
     io.to(room).emit('messagesUpdated', populatedOrder.messages || []);
-
     await broadcastUnreadUpdate(req.params.id, io);
 
     res.json({ message: 'تم إرسال الرسالة', order: populatedOrder });
@@ -429,7 +458,7 @@ router.post('/:id/markRead', auth, async (req, res) => {
     if (!order) return res.status(404).json({ message: 'الطلب غير موجود' });
 
     const role = req.user.role;
-    const isAuthorized = 
+    const isAuthorized =
       (role === 'customer' && order.user.toString() === req.user.id) ||
       (role === 'vendor' && order.vendor.toString() === req.user.id);
 

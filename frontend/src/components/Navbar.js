@@ -57,17 +57,15 @@ const Navbar = () => {
       transition={{ duration: 0.4 }}
     >
       <div className="max-w-7xl mx-auto flex justify-between items-center">
-        {/* === اللوجو + النص (في الموبايل والكمبيوتر) === */}
+        {/* === اللوجو + النص === */}
         <Link to="/" onClick={handleLinkClick} className="flex items-center gap-3">
           <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}>
-            {/* حجم الأيقونة أكبر في الموبايل */}
-            <img 
-              src="/icon.png" 
-              alt="SHOSE NET" 
-              className="w-14 h-14 sm:w-16 sm:h-16 object-contain" 
+            <img
+              src="/icon.png"
+              alt="SHOSE NET"
+              className="w-14 h-14 sm:w-16 sm:h-16 object-contain"
             />
           </motion.div>
-          {/* النص يظهر دائمًا في الموبايل */}
           <span className="text-xl sm:text-2xl font-bold text-white">
             Web Shose
           </span>
@@ -96,15 +94,20 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* القائمة على الموبايل */}
+      {/* القائمة على الموبايل - أنيميشن خفيف وسريع جدًا */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
-            className="md:hidden mt-4 flex flex-col gap-2"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
+            className="md:hidden mt-4 flex flex-col gap-2 overflow-hidden"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ 
+              duration: 0.18, 
+              ease: "easeOut",
+              staggerChildren: 0.04
+            }}
+            style={{ willChange: 'transform, opacity' }}
           >
             {renderNavLinks(handleLinkClick)}
             {renderAuthButton(handleLogout, true)}
@@ -116,25 +119,37 @@ const Navbar = () => {
 
   // === الروابط ===
   function renderNavLinks(onClick) {
-    return (
-      <>
-        <NavLink to="/" currentPath={location.pathname} onClick={onClick}>الرئيسية</NavLink>
-        <NavLink to="/vendors" currentPath={location.pathname} onClick={onClick}>التجار</NavLink>
-        {user && <NavLink to="/orders" currentPath={location.pathname} onClick={onClick}>الطلبات</NavLink>}
-        {user?.role === 'vendor' && (
-          <NavLink to="/vendor" currentPath={location.pathname} onClick={onClick}>لوحة التاجر</NavLink>
-        )}
-        {user?.role === 'admin' && (
-          <>
-            <NavLink to="/admin" currentPath={location.pathname} onClick={onClick}>لوحة الأدمن</NavLink>
-            <NavLink to="/create-vendor" currentPath={location.pathname} onClick={onClick} color="green">إضافة تاجر</NavLink>
-            <NavLink to="/create-customer" currentPath={location.pathname} onClick={onClick} color="green">إضافة عميل</NavLink>
-            <NavLink to="/block-customer" currentPath={location.pathname} onClick={onClick} color="red">حظر عميل</NavLink>
-            <NavLink to="/admin/pending-customers" currentPath={location.pathname} onClick={onClick} color="yellow">طلبات التسجيل</NavLink>
-          </>
-        )}
-      </>
-    );
+    const links = [
+      { to: "/", label: "الرئيسية" },
+      { to: "/vendors", label: "التجار" },
+      ...(user ? [{ to: "/orders", label: "الطلبات" }] : []),
+      ...(user?.role === 'vendor' ? [{ to: "/vendor", label: "لوحة التاجر" }] : []),
+      ...(user?.role === 'admin' ? [
+        { to: "/admin", label: "لوحة الأدمن" },
+        { to: "/create-vendor", label: "إضافة تاجر", color: "green" },
+        { to: "/create-customer", label: "إضافة عميل", color: "green" },
+        { to: "/block-customer", label: "حظر عميل", color: "red" },
+        { to: "/admin/pending-customers", label: "طلبات التسجيل", color: "yellow" }
+      ] : [])
+    ];
+
+    return links.map((link, index) => (
+      <motion.div
+        key={link.to}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: index * 0.04 }}
+      >
+        <NavLink 
+          to={link.to} 
+          currentPath={location.pathname} 
+          onClick={onClick} 
+          color={link.color}
+        >
+          {link.label}
+        </NavLink>
+      </motion.div>
+    ));
   }
 
   // === زر تسجيل الدخول/الخروج ===
@@ -178,11 +193,12 @@ const NavLink = ({ to, currentPath, children, onClick, color = 'blue' }) => {
     color === 'red' ? 'hover:bg-red-600/20' :
     color === 'yellow' ? 'hover:bg-yellow-600/20' :
     'hover:bg-blue-600/20';
+
   return (
     <Link
       to={to}
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${isActive ? activeBg : hoverBg} ${isActive ? 'ring-2 ring-white/50' : ''}`}
+      className={`block px-4 py-2 rounded-lg text-sm font-medium transition ${isActive ? activeBg : hoverBg} ${isActive ? 'ring-2 ring-white/50' : ''}`}
     >
       {children}
     </Link>

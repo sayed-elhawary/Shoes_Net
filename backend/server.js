@@ -7,20 +7,30 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { Server } = require('socket.io');
+
 dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-// إنشاء مجلد Uploads
+// === CORS أول حاجة ===
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
+
+// === مهم جدًا: express.json() مع حجم كبير (عشان رفع الصور والـ login يشتغلوا مع بعض) ===
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// === إنشاء مجلد Uploads ===
 const uploadsDir = path.join(__dirname, 'Uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log('Created Uploads directory');
 }
 
-// التأكد من وجود placeholder-image.jpg
+// === نسخ placeholder-image.jpg ===
 const placeholderImagePath = path.join(uploadsDir, 'placeholder-image.jpg');
 if (!fs.existsSync(placeholderImagePath)) {
   try {
@@ -36,18 +46,18 @@ if (!fs.existsSync(placeholderImagePath)) {
   }
 }
 
-// إنشاء مجلد public
+// === إنشاء مجلد public ===
 const publicDir = path.join(__dirname, 'public');
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
   console.log('Created public directory');
 }
 
-// تقديم الصور من /Uploads مع كاش ذكي
+// === تقديم الملفات الثابتة من Uploads مع fallback للـ placeholder ===
 app.use('/Uploads', (req, res, next) => {
   const filePath = path.join(uploadsDir, req.path);
   if (!fs.existsSync(filePath)) {
-    console.warn(`File not found: ${filePath}`);
+    console.warn(`File not found: ${filePath}, serving placeholder`);
     if (fs.existsSync(placeholderImagePath)) {
       return res.sendFile(placeholderImagePath);
     }
@@ -58,17 +68,17 @@ app.use('/Uploads', (req, res, next) => {
   const lastModified = stats.mtime.toUTCString();
   res.setHeader('ETag', etag);
   res.setHeader('Last-Modified', lastModified);
-  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   if (req.headers['if-none-match'] === etag || req.headers['if-modified-since'] === lastModified) {
     return res.status(304).end();
   }
   next();
 }, express.static(uploadsDir));
 
-// تقديم الملفات الثابتة من public
+// === تقديم الملفات الثابتة من public ===
 app.use(express.static(publicDir));
 
-// الاتصال بـ MongoDB
+// === الاتصال بـ MongoDB ===
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -77,16 +87,34 @@ mongoose
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Routes
+// === Routes (يجب تكون بعد cors و json) ===
 app.use('/api/products', require('./routes/products'));
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/auth', require('./routes/auth'));
 
-// إعداد Socket.IO
+// === معالجة الأخطاء العامة ===
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err);
+  if (err instanceof SyntaxError && err.status === 413) {
+    return res.status(413).json({ message: 'حجم الطلب كبير جدًا' });
+  }
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ message: err.message });
+  }
+  res.status(err.status || 500).json({ 
+    message: err.message || 'خطأ داخلي في السيرفر' 
+  });
+});
+
+// === إعداد Socket.IO ===
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: { 
+    origin: '*', 
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
 });
 
 const onlineUsers = new Set();
@@ -104,10 +132,13 @@ async function emitUnreadCountUpdate(orderId, io) {
         populate: { path: 'vendor', select: '_id' },
       });
     if (!order || !order.product || !order.product.vendor) return;
+
     const customerId = order.user._id.toString();
     const vendorId = order.product.vendor._id.toString();
+
     const customerUnread = (order.messages || []).filter(m => m.from === 'vendor' && !m.isRead).length;
     const vendorUnread = (order.messages || []).filter(m => m.from === 'customer' && !m.isRead).length;
+
     io.to(`user_${customerId}`).emit('unreadUpdate', {
       orderId: order._id.toString(),
       unreadCount: customerUnread,
@@ -120,6 +151,7 @@ async function emitUnreadCountUpdate(orderId, io) {
       orderId: order._id.toString(),
       unreadCount: vendorUnread,
     });
+
     console.log(`unreadUpdate sent: order=${orderId}, customer=${customerUnread}, vendor=${vendorUnread}`);
   } catch (err) {
     console.error('Error in emitUnreadCountUpdate:', err);
@@ -129,10 +161,7 @@ async function emitUnreadCountUpdate(orderId, io) {
 // إدارة الاتصال عبر Socket.IO
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
-
-  // === التحسين: كل عميل ينضم للغرفة العامة للمنتجات ===
   socket.join('public_products');
-  // === نهاية التحسين ===
 
   socket.on('authenticate', (data) => {
     const { userId, role } = data;
@@ -165,10 +194,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leaveOrder', (orderId) => {
-    if (!socket.userId) {
-      console.error('Leave order failed: userId not set');
-      return;
-    }
+    if (!socket.userId) return;
     socket.leave(`order_${orderId}`);
     console.log(`User ${socket.userId} left order_${orderId}`);
   });
@@ -200,6 +226,7 @@ async function markDeliveredForUser(userId, role, io) {
     } else {
       return;
     }
+
     const orders = await Order.find(query).populate('product', 'vendor');
     for (let order of orders) {
       const from = role === 'customer' ? 'vendor' : 'customer';
@@ -226,4 +253,5 @@ app.set('emitUnreadCountUpdate', emitUnreadCountUpdate);
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://81.10.88.159:${PORT}`);
+  console.log(`API URL: https://shose.duckdns.org/api`);
 });

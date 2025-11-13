@@ -67,7 +67,7 @@ const Navbar = () => {
             />
           </motion.div>
           <span className="text-xl sm:text-2xl font-bold text-white">
-            Web Shose
+            Shoes Net
           </span>
         </Link>
 

@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-
 function CreateVendor() {
   const [form, setForm] = useState({ name: '', email: '', password: '', description: '', phone: '', logo: null });
   const [vendors, setVendors] = useState([]);
@@ -16,7 +15,6 @@ function CreateVendor() {
   const [success, setSuccess] = useState('');
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const navigate = useNavigate();
-
   // Debounce
   const debounce = (func, delay) => {
     let timeoutId;
@@ -25,7 +23,6 @@ function CreateVendor() {
       timeoutId = setTimeout(() => func(...args), delay);
     };
   };
-
   // === التحقق من صلاحية الأدمن ===
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -37,7 +34,6 @@ function CreateVendor() {
     }
     fetchVendors();
   }, [navigate]);
-
   // === جلب التجار مع البحث ===
   const fetchVendors = useCallback(
     debounce(async (query = '') => {
@@ -46,7 +42,6 @@ function CreateVendor() {
         const token = localStorage.getItem('token');
         let url = `${process.env.REACT_APP_API_URL}/api/vendors`;
         if (query) url += `?name=${encodeURIComponent(query)}`;
-
         const res = await axios.get(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -60,17 +55,14 @@ function CreateVendor() {
     }, 400),
     []
   );
-
   useEffect(() => {
     fetchVendors(searchQuery);
   }, [searchQuery, fetchVendors]);
-
   // === إرسال النموذج ===
   const handleSubmit = async () => {
     setError('');
     setSuccess('');
     setLoading(true);
-
     if (!form.name || !form.email || !form.phone || (!isEditing && !form.password)) {
       setError('يرجى ملء جميع الحقول المطلوبة');
       setLoading(false);
@@ -81,7 +73,6 @@ function CreateVendor() {
       setLoading(false);
       return;
     }
-
     const formData = new FormData();
     formData.append('name', form.name);
     formData.append('email', form.email);
@@ -89,7 +80,6 @@ function CreateVendor() {
     if (!isEditing) formData.append('password', form.password);
     if (form.description) formData.append('description', form.description);
     if (form.logo) formData.append('logo', form.logo);
-
     try {
       const token = localStorage.getItem('token');
       if (isEditing) {
@@ -119,7 +109,6 @@ function CreateVendor() {
       setLoading(false);
     }
   };
-
   // === تعديل تاجر ===
   const handleEdit = (vendor) => {
     setForm({
@@ -134,7 +123,6 @@ function CreateVendor() {
     setEditingId(vendor._id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
   // === حذف تاجر ===
   const handleDelete = async (id) => {
     if (!window.confirm('هل أنت متأكد من حذف هذا التاجر؟')) return;
@@ -149,30 +137,25 @@ function CreateVendor() {
       setError(err.response?.data?.message || 'فشل الحذف');
     }
   };
-
   // === إعادة تعيين النموذج ===
   const resetForm = () => {
     setForm({ name: '', email: '', password: '', description: '', phone: '', logo: null });
     setIsEditing(false);
     setEditingId(null);
   };
-
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { duration: 0.5, staggerChildren: 0.08 } }
   };
-
   const cardVariants = {
     hidden: { opacity: 0, y: 30, scale: 0.95 },
     visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
-    hover: { scale: 1.05, y: -8, boxShadow: '0 20px 40px rgba(139, 92, 246, 0.2)' }
+    hover: { scale: 1.05, y: -8, boxShadow: '0 20px 40px rgba(239, 68, 68, 0.2)' }
   };
-
   const inputVariants = {
-    focus: { scale: 1.02, boxShadow: '0 0 0 4px rgba(139, 92, 246, 0.3)' }
+    focus: { scale: 1.02, boxShadow: '0 0 0 4px rgba(239, 68, 68, 0.3)' }
   };
-
   return (
     <motion.div
       className="min-h-screen bg-[#18191a] text-white p-4 sm:p-6 relative overflow-hidden"
@@ -180,12 +163,11 @@ function CreateVendor() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      {/* خلفية ناعمة */}
+      {/* خلفية أحمر ناعمة */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700"></div>
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700"></div>
       </div>
-
       <div className="relative z-10 max-w-6xl mx-auto">
         {/* === العنوان === */}
         <motion.div
@@ -194,12 +176,11 @@ function CreateVendor() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600 drop-shadow-lg">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600 drop-shadow-lg">
             إدارة التجار
           </h1>
-          <p className="text-purple-300 mt-3 text-lg">إنشاء · تعديل · حذف</p>
+          <p className="text-red-300 mt-3 text-lg">إنشاء · تعديل · حذف</p>
         </motion.div>
-
         {/* === رسائل الخطأ / النجاح === */}
         <AnimatePresence>
           {error && (
@@ -223,7 +204,6 @@ function CreateVendor() {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* === نموذج إنشاء/تعديل === */}
         <motion.div
           className="bg-[#242526]/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-700/70 mb-12"
@@ -231,7 +211,7 @@ function CreateVendor() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <h2 className="text-2xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+          <h2 className="text-2xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
             {isEditing ? 'تعديل تاجر' : 'إنشاء تاجر جديد'}
           </h2>
           <div className="grid md:grid-cols-2 gap-5">
@@ -240,7 +220,7 @@ function CreateVendor() {
               placeholder="الاسم الكامل *"
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
-              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-purple-500/50 text-lg"
+              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-red-500/50 text-lg"
               disabled={loading}
               variants={inputVariants}
               whileFocus="focus"
@@ -250,7 +230,7 @@ function CreateVendor() {
               placeholder="البريد الإلكتروني *"
               value={form.email}
               onChange={e => setForm({ ...form, email: e.target.value })}
-              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-purple-500/50 text-lg"
+              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-red-500/50 text-lg"
               disabled={loading}
               variants={inputVariants}
               whileFocus="focus"
@@ -260,7 +240,7 @@ function CreateVendor() {
               placeholder="رقم الهاتف (11 رقم) *"
               value={form.phone}
               onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 11) })}
-              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-purple-500/50 text-lg"
+              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-red-500/50 text-lg"
               disabled={loading}
               maxLength={11}
               variants={inputVariants}
@@ -271,7 +251,7 @@ function CreateVendor() {
               placeholder={isEditing ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور *'}
               value={form.password}
               onChange={e => setForm({ ...form, password: e.target.value })}
-              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-purple-500/50 text-lg"
+              className="p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-red-500/50 text-lg"
               disabled={loading}
               variants={inputVariants}
               whileFocus="focus"
@@ -280,7 +260,7 @@ function CreateVendor() {
               placeholder="وصف التاجر"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
-              className="md:col-span-2 p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 h-28 resize-none focus:outline-none focus:ring-4 focus:ring-purple-500/50 text-lg"
+              className="md:col-span-2 p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right placeholder-gray-400 h-28 resize-none focus:outline-none focus:ring-4 focus:ring-red-500/50 text-lg"
               disabled={loading}
               variants={inputVariants}
               whileFocus="focus"
@@ -294,7 +274,7 @@ function CreateVendor() {
                 type="file"
                 accept="image/*"
                 onChange={e => setForm({ ...form, logo: e.target.files[0] })}
-                className="w-full p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
+                className="w-full p-5 rounded-2xl bg-[#3a3b3c]/60 border border-gray-600 text-right file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-red-600 file:text-white hover:file:bg-red-700 cursor-pointer"
                 disabled={loading}
               />
             </motion.div>
@@ -303,7 +283,7 @@ function CreateVendor() {
             <motion.button
               onClick={handleSubmit}
               disabled={loading}
-              className="flex-1 py-4 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl font-bold shadow-lg hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 transition-all duration-300 text-lg"
+              className="flex-1 py-4 bg-gradient-to-r from-red-600 to-red-700 rounded-xl font-bold shadow-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 transition-all duration-300 text-lg"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -331,7 +311,6 @@ function CreateVendor() {
             )}
           </div>
         </motion.div>
-
         {/* === حقل البحث === */}
         <motion.div
           className="max-w-xl mx-auto mb-10"
@@ -344,22 +323,20 @@ function CreateVendor() {
             placeholder="ابحث باسم التاجر..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full p-5 rounded-2xl bg-[#242526] text-white border border-gray-700 focus:outline-none focus:ring-4 focus:ring-purple-500/50 text-lg transition-all duration-300 shadow-xl placeholder-gray-400"
+            className="w-full p-5 rounded-2xl bg-[#242526] text-white border border-gray-700 focus:outline-none focus:ring-4 focus:ring-red-500/50 text-lg transition-all duration-300 shadow-xl placeholder-gray-400"
             variants={inputVariants}
             whileFocus="focus"
           />
         </motion.div>
-
         {/* === قائمة التجار === */}
-        <h2 className="text-3xl font-bold text-center mb-10 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+        <h2 className="text-3xl font-bold text-center mb-10 text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
           قائمة التجار
         </h2>
-
         <AnimatePresence mode="wait">
           {fetchLoading ? (
             <motion.p
               key="loading"
-              className="text-center text-2xl text-purple-400 py-16"
+              className="text-center text-2xl text-red-400 py-16"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -395,16 +372,16 @@ function CreateVendor() {
                   <div className="p-6 flex justify-center items-center flex-1">
                     {vendor.logo ? (
                       <img
-                        src={`${process.env.REACT_APP_API_URL}/uploads/${vendor.logo}`}
+                        src={`${process.env.REACT_APP_API_URL}/Uploads/${vendor.logo}`}
                         alt={`لوجو ${vendor.name}`}
-                        className="w-32 h-32 object-contain rounded-2xl border border-purple-600/50 shadow-xl p-2 bg-white/5"
+                        className="w-32 h-32 object-contain rounded-2xl border border-red-600/50 shadow-xl p-2 bg-white/5"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = `${process.env.REACT_APP_API_URL}/uploads/placeholder-image.jpg`;
+                          e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`;
                         }}
                       />
                     ) : (
-                      <div className="w-32 h-32 bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl flex items-center justify-center shadow-xl">
+                      <div className="w-32 h-32 bg-gradient-to-br from-red-600 to-red-800 rounded-2xl flex items-center justify-center shadow-xl">
                         <span className="text-3xl font-bold text-white">
                           {vendor.name.charAt(0).toUpperCase()}
                         </span>
@@ -412,7 +389,7 @@ function CreateVendor() {
                     )}
                   </div>
                   <div className="p-5 space-y-3 text-right border-t border-gray-700 bg-gradient-to-t from-black/20 to-transparent">
-                    <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600 line-clamp-1">
+                    <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600 line-clamp-1">
                       {vendor.name}
                     </h3>
                     <p className="text-sm text-gray-300">البريد: {vendor.email}</p>
@@ -441,7 +418,6 @@ function CreateVendor() {
           )}
         </AnimatePresence>
       </div>
-
       {/* === أنيميشن النجاح === */}
       <AnimatePresence>
         {showSuccessAnimation && (
@@ -468,5 +444,4 @@ function CreateVendor() {
     </motion.div>
   );
 }
-
 export default CreateVendor;

@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-
 const ManageCustomers = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +12,6 @@ const ManageCustomers = () => {
   const [form, setForm] = useState({});
   const [blockReason, setBlockReason] = useState('');
   const navigate = useNavigate();
-
   // === التحقق من صلاحية الأدمن ===
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -25,7 +23,6 @@ const ManageCustomers = () => {
     }
     fetchCustomers();
   }, [navigate]);
-
   // === جلب العملاء ===
   const fetchCustomers = async () => {
     try {
@@ -40,7 +37,6 @@ const ManageCustomers = () => {
       setLoading(false);
     }
   };
-
   // === بدء التعديل ===
   const handleEdit = (customer) => {
     setEditing(customer._id);
@@ -51,7 +47,6 @@ const ManageCustomers = () => {
       password: '',
     });
   };
-
   // === حفظ التعديل ===
   const handleUpdate = async (id) => {
     try {
@@ -68,7 +63,6 @@ const ManageCustomers = () => {
       showToast(err.response?.data?.message || 'فشل التحديث', 'error');
     }
   };
-
   // === حظر عميل ===
   const handleBlock = async (id) => {
     if (!blockReason.trim()) {
@@ -91,7 +85,6 @@ const ManageCustomers = () => {
       showToast(err.response?.data?.message || 'فشل الحظر', 'error');
     }
   };
-
   // === إلغاء الحظر ===
   const handleUnblock = async (id) => {
     try {
@@ -108,13 +101,11 @@ const ManageCustomers = () => {
       showToast(err.response?.data?.message || 'فشل إلغاء الحظر', 'error');
     }
   };
-
   // === Toast ===
   const showToast = (message, type) => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
   };
-
   // === الأنيميشن ===
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -123,15 +114,13 @@ const ManageCustomers = () => {
   };
   const buttonVariants = { hover: { scale: 1.05 }, tap: { scale: 0.95 } };
   const toastVariants = { hidden: { opacity: 0, x: 50 }, visible: { opacity: 1, x: 0 }, exit: { opacity: 0, x: 50 } };
-
   return (
     <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
-      {/* خلفية موف ناعمة */}
+      {/* خلفية أحمر ناعمة */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
-
       <div className="relative z-10 max-w-6xl mx-auto">
         {/* === العنوان === */}
         <motion.div
@@ -140,12 +129,11 @@ const ManageCustomers = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
-          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
             إدارة العملاء
           </h1>
-          <p className="text-purple-300 mt-2 text-lg">تعديل · حظر · إلغاء</p>
+          <p className="text-red-300 mt-2 text-lg">تعديل · حظر · إلغاء</p>
         </motion.div>
-
         {/* === Toast === */}
         <AnimatePresence>
           {toast.show && (
@@ -162,12 +150,11 @@ const ManageCustomers = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* === حالة التحميل === */}
         {loading ? (
           <div className="flex justify-center py-20">
             <motion.div
-              className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full"
+              className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full"
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             />
@@ -203,21 +190,21 @@ const ManageCustomers = () => {
                         type="text"
                         value={form.name}
                         onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        className="w-full p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                        className="w-full p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500"
                         placeholder="الاسم"
                       />
                       <input
                         type="text"
                         value={form.newPhone}
                         onChange={(e) => setForm({ ...form, newPhone: e.target.value })}
-                        className="w-full p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                        className="w-full p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500"
                         placeholder="رقم الهاتف الجديد"
                       />
                       <input
                         type="password"
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        className="w-full p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                        className="w-full p-3 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500"
                         placeholder="كلمة مرور جديدة (اختياري)"
                       />
                       <div className="flex gap-2">
@@ -284,7 +271,7 @@ const ManageCustomers = () => {
                         ) : (
                           <motion.button
                             onClick={() => setBlocking(customer._id)}
-                            className="flex-1 py-2 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl text-sm font-medium"
+                            className="flex-1 py-2 bg-gradient-to-r from-red-600 to-red-700 rounded-xl text-sm font-medium"
                             variants={buttonVariants}
                             whileHover="hover"
                             whileTap="tap"
@@ -300,7 +287,6 @@ const ManageCustomers = () => {
             </AnimatePresence>
           </div>
         )}
-
         {/* === نافذة سبب الحظر === */}
         <AnimatePresence>
           {blocking && (
@@ -318,17 +304,17 @@ const ManageCustomers = () => {
                 exit={{ scale: 0.8 }}
                 onClick={e => e.stopPropagation()}
               >
-                <h3 className="text-xl font-bold text-purple-400 mb-4 text-center">سبب الحظر</h3>
+                <h3 className="text-xl font-bold text-red-400 mb-4 text-center">سبب الحظر</h3>
                 <textarea
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
-                  className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 h-28 resize-none focus:outline-none focus:border-purple-500"
+                  className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 h-28 resize-none focus:outline-none focus:border-red-500"
                   placeholder="اكتب سبب الحظر..."
                 />
                 <div className="flex gap-3 mt-5">
                   <motion.button
                     onClick={() => handleBlock(blocking)}
-                    className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl font-bold"
+                    className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 rounded-xl font-bold"
                     variants={buttonVariants}
                     whileHover="hover"
                     whileTap="tap"
@@ -353,5 +339,4 @@ const ManageCustomers = () => {
     </div>
   );
 };
-
 export default ManageCustomers;

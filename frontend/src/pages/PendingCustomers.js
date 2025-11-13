@@ -3,13 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-
 const PendingCustomers = () => {
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const navigate = useNavigate();
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
@@ -19,7 +17,6 @@ const PendingCustomers = () => {
     }
     fetchPending();
   }, [navigate]);
-
   const fetchPending = async () => {
     try {
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/pending-customers`, {
@@ -32,7 +29,6 @@ const PendingCustomers = () => {
       setLoading(false);
     }
   };
-
   const approve = async (phone) => {
     try {
       await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/approve-customer`, { phone }, {
@@ -44,7 +40,6 @@ const PendingCustomers = () => {
       showToast(err.response?.data?.message || 'فشل في الموافقة', 'error');
     }
   };
-
   const reject = async (phone) => {
     if (!window.confirm('هل تريد رفض هذا الطلب؟')) return;
     try {
@@ -57,12 +52,10 @@ const PendingCustomers = () => {
       showToast(err.response?.data?.message || 'فشل في الرفض', 'error');
     }
   };
-
   const showToast = (message, type) => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
   };
-
   // === الأنيميشن ===
   const cardVariants = {
     hidden: { opacity: 0, x: -30 },
@@ -78,15 +71,13 @@ const PendingCustomers = () => {
     visible: { opacity: 1, x: 0 },
     exit: { opacity: 0, x: 50 }
   };
-
   return (
     <div className="min-h-screen bg-[#18191a] text-white p-6 relative overflow-hidden">
-      {/* خلفية موف ناعمة */}
+      {/* خلفية أحمر ناعمة */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
-
       <div className="relative z-10 max-w-5xl mx-auto">
         {/* === العنوان === */}
         <motion.div
@@ -95,17 +86,16 @@ const PendingCustomers = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
-          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
             طلبات التسجيل المعلقة
           </h1>
-          <p className="text-purple-300 mt-2 text-lg">مراجعة طلبات العملاء الجدد</p>
+          <p className="text-red-300 mt-2 text-lg">مراجعة طلبات العملاء الجدد</p>
         </motion.div>
-
         {/* === حالة التحميل === */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <motion.div
-              className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full"
+              className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full"
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             />
@@ -134,7 +124,7 @@ const PendingCustomers = () => {
                   layout
                 >
                   <div className="text-right">
-                    <p className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+                    <p className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
                       {customer.name}
                     </p>
                     <p className="text-sm text-slate-300 mt-1">رقم الهاتف: {customer.phone}</p>
@@ -142,7 +132,6 @@ const PendingCustomers = () => {
                       تاريخ الطلب: {new Date(customer.createdAt).toLocaleString('ar-EG')}
                     </p>
                   </div>
-
                   <div className="flex gap-3 w-full sm:w-auto">
                     <motion.button
                       onClick={() => approve(customer.phone)}
@@ -169,7 +158,6 @@ const PendingCustomers = () => {
           </div>
         )}
       </div>
-
       {/* === Toast === */}
       <AnimatePresence>
         {toast.show && (
@@ -189,5 +177,4 @@ const PendingCustomers = () => {
     </div>
   );
 };
-
 export default PendingCustomers;

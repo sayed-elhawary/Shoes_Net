@@ -32,7 +32,7 @@ const customerSchema = new mongoose.Schema({
   },
   isPending: {
     type: Boolean,
-    default: true,  // في انتظار الموافقة
+    default: true, // في انتظار الموافقة
   },
   isApproved: {
     type: Boolean,
@@ -41,6 +41,11 @@ const customerSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
+  },
+  // ==== NEW FIELD ====
+  isOnline: {
+    type: Boolean,
+    default: false,
   },
 });
 

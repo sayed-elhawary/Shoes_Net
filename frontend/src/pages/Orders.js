@@ -1,3 +1,4 @@
+// frontend/src/pages/Orders.js
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -79,27 +80,22 @@ const Orders = () => {
       const socket = socketRef.current;
       socket.connect();
       socket.emit('authenticate', { userId: payload.id, role: payload.role });
-
       socket.on('connect', () => {
         console.log('Socket connected successfully');
         if (currentOrderIdRef.current) {
           socket.emit('joinOrder', currentOrderIdRef.current);
         }
       });
-
       socket.on('error', (err) => {
         console.error('Socket.IO error:', err);
         setError(`خطأ في الاتصال: ${err.message || 'غير معروف'}`);
       });
-
       socket.on('orderJoined', ({ orderId }) => {
         console.log(`Successfully joined order room: ${orderId}`);
       });
-
       socket.on('disconnect', () => {
         console.log('Socket disconnected');
       });
-
       return () => {
         if (socket.connected) {
           socket.disconnect();
@@ -137,7 +133,6 @@ const Orders = () => {
     params.append('page', page);
     params.append('limit', limit);
     if (params.toString()) url += `?${params.toString()}`;
-
     axios
       .get(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -178,12 +173,9 @@ const Orders = () => {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
-
     const userRole = getUserRole();
-
     const handleNewMessage = (message) => {
       const orderId = message.orderId;
-
       // تحديث unreadCount فوراً في الـ orders
       if (message.from !== userRole) {
         setOrders(prevOrders =>
@@ -194,7 +186,6 @@ const Orders = () => {
           )
         );
       }
-
       // إذا الشات مفتوح، أضف الرسالة
       if (isChatManuallyOpened && selectedOrderForMessages?._id === orderId) {
         setSelectedOrderForMessages(prev => {
@@ -207,21 +198,17 @@ const Orders = () => {
         });
         setTimeout(scrollToBottom, 100);
       }
-
       // إظهار زر الإشعار العائم
       if (!isChatManuallyOpened && message.from !== userRole) {
         setShowFloatingChatButton(true);
       }
     };
-
     const handleMessagesUpdated = (data) => {
       const { orderId, messages } = data;
       const unreadCount = messages.filter(msg => !msg.isRead && msg.from !== userRole).length;
-
       setOrders(prev =>
         prev.map(o => (o._id === orderId ? { ...o, unreadCount, messages } : o))
       );
-
       if (isChatManuallyOpened && selectedOrderForMessages?._id === orderId) {
         setSelectedOrderForMessages(prev => ({
           ...prev,
@@ -231,25 +218,20 @@ const Orders = () => {
         setTimeout(scrollToBottom, 100);
       }
     };
-
     const handleUnreadUpdate = ({ orderId, unreadCount }) => {
       setOrders(prev =>
         prev.map(o => (o._id === orderId ? { ...o, unreadCount } : o))
       );
-
       if (selectedOrderForMessages?._id === orderId) {
         setSelectedOrderForMessages(prev => ({ ...prev, unreadCount }));
       }
-
       if (unreadCount > 0 && !isChatManuallyOpened) {
         setShowFloatingChatButton(true);
       }
     };
-
     socket.on('newMessage', handleNewMessage);
     socket.on('messagesUpdated', handleMessagesUpdated);
     socket.on('unreadUpdate', handleUnreadUpdate);
-
     return () => {
       socket.off('newMessage', handleNewMessage);
       socket.off('messagesUpdated', handleMessagesUpdated);
@@ -266,11 +248,9 @@ const Orders = () => {
       }
       return;
     }
-
     const orderId = selectedOrderForMessages._id;
     currentOrderIdRef.current = orderId;
     socketRef.current.emit('joinOrder', orderId);
-
     const token = localStorage.getItem('token');
     axios
       .post(
@@ -290,12 +270,10 @@ const Orders = () => {
         });
       })
       .catch(console.error);
-
     if (isFirstOpenRef.current) {
       setTimeout(scrollToBottom, 100);
       isFirstOpenRef.current = false;
     }
-
     return () => {
       socketRef.current.emit('leaveOrder', orderId);
       currentOrderIdRef.current = null;
@@ -370,7 +348,6 @@ const Orders = () => {
     setEditOrder(order);
     setEditForm({ quantity: order.quantity || 1, address: order.address || '' });
   };
-
   const handleEditSubmit = () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -415,10 +392,8 @@ const Orders = () => {
   // Group orders - مع دعم unreadCount
   const groupOrders = useCallback((ordersList, role) => {
     if (role === 'customer') return ordersList;
-
     const grouped = {};
     let totalUnreadInGroup = 0;
-
     ordersList.forEach(order => {
       const key = `${order.product._id}-${order.user._id}-${order.address}`;
       if (!grouped[key]) {
@@ -440,7 +415,6 @@ const Orders = () => {
       grouped[key].unreadCount += (order.unreadCount || 0);
       totalUnreadInGroup += (order.unreadCount || 0);
     });
-
     return Object.values(grouped).map(group => ({
       ...group,
       selectedImage: Array.from(group.selectedImages)[0] || 'placeholder-image.jpg',
@@ -485,7 +459,7 @@ const Orders = () => {
                       new TableCell({ children: [new Paragraph({ text: 'رقم الطلب', rtl: true, bold: true })], width: { size: 10, type: WidthType.PERCENTAGE } }),
                       new TableCell({ children: [new Paragraph({ text: 'الصورة', rtl: true, bold: true })], width: { size: 12, type: WidthType.PERCENTAGE } }),
                       new TableCell({ children: [new Paragraph({ text: 'العميل', rtl: true, bold: true })], width: { size: 12, type: WidthType.PERCENTAGE } }),
-                      new TableCell({ children: [new Paragraph({ text: 'رقم الهاتف', rtl: true, bold: true })], width: { size: 12, type: WidthType.PERCENTAGE } }),
+                      new TableCell({ children: [new Paragraph({ text: 'رقم الهاتف', rtl: true, bold: true })], width: { size: 12, type:  WidthType.PERCENTAGE } }),
                       new TableCell({ children: [new Paragraph({ text: 'العنوان', rtl: true, bold: true })], width: { size: 15, type: WidthType.PERCENTAGE } }),
                       new TableCell({ children: [new Paragraph({ text: 'المنتج', rtl: true, bold: true })], width: { size: 12, type: WidthType.PERCENTAGE } }),
                       new TableCell({ children: [new Paragraph({ text: 'التاجر', rtl: true, bold: true })], width: { size: 12, type: WidthType.PERCENTAGE } }),
@@ -586,7 +560,6 @@ const Orders = () => {
     setIsChatManuallyOpened(true);
     isFirstOpenRef.current = true;
   };
-
   const closeMessages = () => {
     setSelectedOrderForMessages(null);
     setNewMessage('');
@@ -615,7 +588,6 @@ const Orders = () => {
     }
     return 'user';
   };
-
   const userRole = getUserRole();
   const rawDisplayOrders = showUnreadOnly ? orders.filter(o => (o.unreadCount || 0) > 0) : orders;
   const displayOrders = groupOrders(rawDisplayOrders, userRole);
@@ -624,13 +596,13 @@ const Orders = () => {
   // Animation variants
   const tableVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, staggerChildren: 0.05 } } };
   const rowVariants = { hidden: { opacity: 0, x: -20 }, visible: { opacity: 1, x: 0, transition: { duration: 0.3 } } };
-  const buttonVariants = { hover: { scale: 1.05, boxShadow: '0 8px 16px rgba(139, 92, 246, 0.3)' }, tap: { scale: 0.95 } };
+  const buttonVariants = { hover: { scale: 1.05, boxShadow: '0 8px 16px rgba(239, 68, 68, 0.3)' }, tap: { scale: 0.95 } };
   const modalVariants = { hidden: { opacity: 0, scale: 0.85 }, visible: { opacity: 1, scale: 1, transition: { duration: 0.25 } }, exit: { opacity: 0, scale: 0.85, transition: { duration: 0.2 } } };
 
   return (
     <motion.div className="min-h-screen flex flex-col items-center bg-[#18191a] p-4 sm:p-6 text-white overflow-x-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
       {/* Header */}
-      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-purple-600 drop-shadow-lg">
+      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-red-600 drop-shadow-lg">
         قائمة الطلبات
       </h1>
 
@@ -646,28 +618,28 @@ const Orders = () => {
       {userRole !== 'customer' && (
         <div className="w-full max-w-7xl mb-8 bg-[#242526] p-6 rounded-2xl shadow-2xl border border-gray-700">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
-            <input type="text" placeholder="ابحث باسم التاجر" value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
-            <input type="text" placeholder="ابحث برقم الهاتف" value={phoneSearch} onChange={(e) => setPhoneSearch(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
-            <input type="text" placeholder="ابحث برقم الطلب" value={orderNumberSearch} onChange={(e) => setOrderNumberSearch(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
+            <input type="text" placeholder="ابحث باسم التاجر" value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition" />
+            <input type="text" placeholder="ابحث برقم الهاتف" value={phoneSearch} onChange={(e) => setPhoneSearch(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition" />
+            <input type="text" placeholder="ابحث برقم الطلب" value={orderNumberSearch} onChange={(e) => setOrderNumberSearch(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition" />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition" />
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition" />
           </div>
           <div className="flex flex-wrap items-center gap-4 mb-6">
             <span className="text-gray-300 font-medium">فلتر الحالة:</span>
             {['rejected', 'shipped', 'delivered'].map(status => (
               <label key={status} className="flex items-center space-x-2 space-x-reverse cursor-pointer">
-                <input type="checkbox" checked={statusFilters[status]} onChange={(e) => setStatusFilters(prev => ({ ...prev, [status]: e.target.checked }))} className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 accent-purple-600" />
+                <input type="checkbox" checked={statusFilters[status]} onChange={(e) => setStatusFilters(prev => ({ ...prev, [status]: e.target.checked }))} className="w-5 h-5 text-red-600 rounded focus:ring-red-500 accent-red-600" />
                 <span className="text-white">{status === 'rejected' ? 'مرفوض' : status === 'shipped' ? 'جاري الشحن' : 'تم التسليم'}</span>
               </label>
             ))}
             <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
-              <input type="checkbox" checked={showUnreadOnly} onChange={(e) => setShowUnreadOnly(e.target.checked)} className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 accent-purple-600" />
+              <input type="checkbox" checked={showUnreadOnly} onChange={(e) => setShowUnreadOnly(e.target.checked)} className="w-5 h-5 text-red-600 rounded focus:ring-red-500 accent-red-600" />
               <span className="text-white">الطلبات التي بها رسائل غير مقروءة فقط</span>
             </label>
           </div>
           <div className="flex flex-wrap gap-4">
-            <motion.button onClick={fetchOrders} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">بحث</motion.button>
-            <motion.button onClick={exportToWord} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">تصدير إلى Word</motion.button>
+            <motion.button onClick={fetchOrders} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">بحث</motion.button>
+            <motion.button onClick={exportToWord} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">تصدير إلى Word</motion.button>
           </div>
         </div>
       )}
@@ -718,7 +690,7 @@ const Orders = () => {
                     </td>
                     <td className="py-4 px-6 text-center">
                       {!order.isGrouped && (
-                        <motion.button onClick={() => openMessages(order)} className={`relative w-12 h-12 rounded-full flex items-center justify-center text-purple-400 font-bold shadow-lg text-lg bg-gradient-to-r ${order.unreadCount > 0 ? 'from-red-600 to-red-800 animate-pulse' : 'from-gray-600 to-gray-800'}`} variants={buttonVariants} whileHover="hover" whileTap="tap">
+                        <motion.button onClick={() => openMessages(order)} className={`relative w-12 h-12 rounded-full flex items-center justify-center text-red-400 font-bold shadow-lg text-lg bg-gradient-to-r ${order.unreadCount > 0 ? 'from-red-600 to-red-800 animate-pulse' : 'from-gray-600 to-gray-800'}`} variants={buttonVariants} whileHover="hover" whileTap="tap">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                           </svg>
@@ -744,7 +716,7 @@ const Orders = () => {
                           </>
                         )}
                         {userRole === 'vendor' && !order.isGrouped && (
-                          <motion.select value={order.status} onChange={(e) => handleUpdateStatus(order._id, e.target.value)} className="p-3 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm" variants={buttonVariants} whileHover="hover">
+                          <motion.select value={order.status} onChange={(e) => handleUpdateStatus(order._id, e.target.value)} className="p-3 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm" variants={buttonVariants} whileHover="hover">
                             <option value="pending">تحت المراجعة</option>
                             <option value="shipped">جاري الشحن</option>
                             <option value="delivered">تم التسليم</option>
@@ -770,9 +742,9 @@ const Orders = () => {
       {/* Pagination */}
       {!loading && total > limit && (
         <div className="flex justify-center items-center gap-6 mt-8">
-          <motion.button onClick={() => setPage(prev => Math.max(1, prev - 1))} disabled={page === 1} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg" variants={buttonVariants} whileHover={page !== 1 ? "hover" : {}} whileTap={page !== 1 ? "tap" : {}}>السابق</motion.button>
+          <motion.button onClick={() => setPage(prev => Math.max(1, prev - 1))} disabled={page === 1} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg" variants={buttonVariants} whileHover={page !== 1 ? "hover" : {}} whileTap={page !== 1 ? "tap" : {}}>السابق</motion.button>
           <span className="text-xl text-gray-300">صفحة {page} من {Math.ceil(total / limit)}</span>
-          <motion.button onClick={() => setPage(prev => prev + 1)} disabled={page * limit >= total} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg" variants={buttonVariants} whileHover={page * limit < total ? "hover" : {}} whileTap={page * limit < total ? "tap" : {}}>التالي</motion.button>
+          <motion.button onClick={() => setPage(prev => prev + 1)} disabled={page * limit >= total} className="px-8 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg" variants={buttonVariants} whileHover={page * limit < total ? "hover" : {}} whileTap={page * limit < total ? "tap" : {}}>التالي</motion.button>
         </div>
       )}
 
@@ -786,9 +758,9 @@ const Orders = () => {
                 openMessages(orderWithUnread);
               }
             }}
-            className="relative w-16 h-16 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full shadow-2xl flex items-center justify-center"
+            className="relative w-16 h-16 bg-gradient-to-r from-red-600 to-red-700 rounded-full shadow-2xl flex items-center justify-center"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center animate-pulse">
@@ -803,10 +775,10 @@ const Orders = () => {
         {editOrder && !editOrder.isGrouped && (
           <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={(e) => e.stopPropagation()}>
             <motion.div className="bg-[#242526] p-8 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-3xl font-bold mb-8 text-right bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-purple-700">تعديل الطلب</h2>
+              <h2 className="text-3xl font-bold mb-8 text-right bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-red-700">تعديل الطلب</h2>
               <div className="space-y-6">
-                <input type="number" placeholder="الكمية" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })} className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-right text-lg" min="1" />
-                <input type="text" placeholder="العنوان" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-right text-lg" />
+                <input type="number" placeholder="الكمية" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })} className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right text-lg" min="1" />
+                <input type="text" placeholder="العنوان" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right text-lg" />
               </div>
               <div className="flex gap-4 mt-8">
                 <motion.button onClick={handleEditSubmit} className="flex-1 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-green-600 to-green-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">حفظ التعديلات</motion.button>
@@ -822,7 +794,7 @@ const Orders = () => {
         {selectedOrderForMessages && isChatManuallyOpened && !selectedOrderForMessages.isGrouped && (
           <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="exit">
             <motion.div className="bg-[#242526] p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-3xl font-bold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-purple-700">
+              <h2 className="text-3xl font-bold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-red-700">
                 الرسائل للطلب #{selectedOrderForMessages.orderNumber}
               </h2>
               <div ref={chatContainerRef} className="flex-1 overflow-y-auto mb-6 bg-[#3a3b3c] p-4 rounded-2xl shadow-inner">
@@ -833,7 +805,7 @@ const Orders = () => {
                       const senderName = msg.from === 'vendor' ? selectedOrderForMessages.product?.vendor?.name : selectedOrderForMessages.user?.name || 'غير معروف';
                       return (
                         <div key={msg._id || index} className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-xs sm:max-w-sm p-4 rounded-2xl shadow-md ${isMyMessage ? 'bg-gradient-to-r from-purple-600 to-purple-800 text-white' : 'bg-gray-700 text-white'}`}>
+                          <div className={`max-w-xs sm:max-w-sm p-4 rounded-2xl shadow-md ${isMyMessage ? 'bg-gradient-to-r from-red-600 to-red-800 text-white' : 'bg-gray-700 text-white'}`}>
                             <p className="font-bold text-sm opacity-90">{msg.from === 'vendor' ? 'التاجر' : 'العميل'}: {senderName}</p>
                             {msg.text && <p className="mt-2 text-lg">{msg.text}</p>}
                             {msg.image && (
@@ -854,9 +826,9 @@ const Orders = () => {
               </div>
               {(userRole === 'vendor' || userRole === 'customer') && (
                 <form onSubmit={handleSendMessage} className="space-y-4">
-                  <textarea placeholder="اكتب رسالتك هنا..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-right resize-none" rows="4" />
+                  <textarea placeholder="اكتب رسالتك هنا..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} className="w-full p-4 rounded-xl bg-[#3a3b3c] text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 text-right resize-none" rows="4" />
                   <div className="flex items-center gap-4">
-                    <input type="file" accept="image/*" onChange={(e) => setNewImage(e.target.files[0] || null)} className="text-sm text-gray-300 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700" />
+                    <input type="file" accept="image/*" onChange={(e) => setNewImage(e.target.files[0] || null)} className="text-sm text-gray-300 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-red-600 file:text-white hover:file:bg-red-700" />
                     {newImagePreview && (
                       <div className="relative">
                         <img src={newImagePreview} alt="معاينة" className="w-24 h-24 object-cover rounded-xl shadow-lg" />
@@ -864,7 +836,7 @@ const Orders = () => {
                       </div>
                     )}
                   </div>
-                  <motion.button type="submit" className="w-full py-4 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-purple-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">إرسال الرسالة</motion.button>
+                  <motion.button type="submit" className="w-full py-4 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-800 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">إرسال الرسالة</motion.button>
                 </form>
               )}
               <motion.button onClick={closeMessages} className="w-full mt-4 py-4 rounded-xl text-white font-bold bg-gradient-to-r from-gray-700 to-gray-900 shadow-xl text-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">

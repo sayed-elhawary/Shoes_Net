@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { X, Upload, Image as ImageIcon, Video, FileVideo } from 'lucide-react';
-
 const VendorDashboard = () => {
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState({
@@ -16,7 +15,6 @@ const VendorDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const fileInputRef = useRef(null);
-
   // === جلب المنتجات (يتحدث تلقائيًا بعد أي تغيير) ===
   const fetchProducts = () => {
     const token = localStorage.getItem('token');
@@ -47,12 +45,10 @@ const VendorDashboard = () => {
       })
       .finally(() => setLoading(false));
   };
-
   // === جلب المنتجات عند التحميل + بعد أي تغيير ===
   useEffect(() => {
     fetchProducts();
   }, []); // أول مرة
-
   // === إضافة منتج ===
   const handleAddProduct = () => {
     if (!form.name || !form.type || !form.price || !form.quantityPerCarton || !form.manufacturer) {
@@ -88,14 +84,12 @@ const VendorDashboard = () => {
       })
       .finally(() => setLoading(false));
   };
-
   const resetForm = () => {
     setForm({ name: '', type: '', price: '', quantityPerCarton: '', manufacturer: '', description: '' });
     setSelectedFiles([]);
     setPreviewFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
-
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     const maxSize = 50 * 1024 * 1024;
@@ -118,12 +112,10 @@ const VendorDashboard = () => {
     }));
     setPreviewFiles(prev => [...prev, ...previews]);
   };
-
   const removeFile = (index) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setPreviewFiles(prev => prev.filter((_, i) => i !== index));
   };
-
   const handleDelete = (id) => {
     if (!window.confirm('هل تريد حذف هذا المنتج؟')) return;
     const token = localStorage.getItem('token');
@@ -138,7 +130,6 @@ const VendorDashboard = () => {
       .catch(err => showToast('خطأ في حذف المنتج: ' + err.message, 'error'))
       .finally(() => setLoading(false));
   };
-
   // === تحديث المنتج بدون رفع ملفات ===
   const handleUpdateProduct = () => {
     if (!editingProduct.name || !editingProduct.type || !editingProduct.price || !editingProduct.quantityPerCarton || !editingProduct.manufacturer) {
@@ -161,15 +152,12 @@ const VendorDashboard = () => {
       })
       .finally(() => setLoading(false));
   };
-
   const openMedia = (media, type) => setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/Uploads/${media}`, type });
   const closeMedia = () => setSelectedMedia(null);
-
   const showToast = (message, type) => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
   };
-
   const cardVariants = {
     hidden: { opacity: 0, y: 20, scale: 0.98 },
     visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
@@ -177,23 +165,20 @@ const VendorDashboard = () => {
   };
   const buttonVariants = { hover: { scale: 1.05 }, tap: { scale: 0.95 } };
   const toastVariants = { hidden: { opacity: 0, x: 50 }, visible: { opacity: 1, x: 0 }, exit: { opacity: 0, x: 50 } };
-
   return (
     <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
-
       <div className="relative z-10 w-full max-w-7xl mx-auto">
         {/* === العنوان === */}
         <motion.div className="text-center mb-10" initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
             لوحة تحكم التاجر
           </h1>
-          <p className="text-purple-300 mt-2 text-lg">إدارة منتجاتك بسهولة</p>
+          <p className="text-red-300 mt-2 text-lg">إدارة منتجاتك بسهولة</p>
         </motion.div>
-
         {/* === Toast === */}
         <AnimatePresence>
           {toast.show && (
@@ -208,7 +193,6 @@ const VendorDashboard = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* === نموذج إضافة منتج === */}
         <motion.div className="bg-[#242526]/80 backdrop-blur-xl p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-700/50 mb-10" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -225,13 +209,13 @@ const VendorDashboard = () => {
                 placeholder={field.placeholder}
                 value={form[field.key]}
                 onChange={e => setForm({ ...form, [field.key]: e.target.value })}
-                className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 transition"
+                className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30 transition"
               />
             ))}
             <select
               value={form.type}
               onChange={e => setForm({ ...form, type: e.target.value })}
-              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 transition"
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30 transition"
             >
               <option value="" disabled>اختر النوع</option>
               <option value="رجالي">رجالي</option>
@@ -239,7 +223,6 @@ const VendorDashboard = () => {
               <option value="أطفال">أطفال</option>
             </select>
           </div>
-
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-300 mb-3">
               <Upload className="inline w-5 h-5 ml-2" />
@@ -251,18 +234,17 @@ const VendorDashboard = () => {
               multiple
               accept="image/*,video/*"
               onChange={handleFileChange}
-              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 transition"
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-600 file:text-white hover:file:bg-red-700 transition"
             />
           </div>
-
           {previewFiles.length > 0 && (
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {previewFiles.map((file, index) => (
                 <div key={index} className="relative group">
                   {file.type === 'image' ? (
-                    <img src={file.url} alt="" className="w-full h-32 object-cover rounded-lg border border-purple-500" />
+                    <img src={file.url} alt="" className="w-full h-32 object-cover rounded-lg border border-red-500" />
                   ) : (
-                    <video src={file.url} className="w-full h-32 object-cover rounded-lg border border-purple-500" />
+                    <video src={file.url} className="w-full h-32 object-cover rounded-lg border border-red-500" />
                   )}
                   <button
                     onClick={() => removeFile(index)}
@@ -277,7 +259,6 @@ const VendorDashboard = () => {
               ))}
             </div>
           )}
-
           <div className="flex gap-3 mt-6">
             <motion.button onClick={handleAddProduct} disabled={loading} className="flex-1 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg disabled:opacity-70 transition" variants={buttonVariants} whileHover="hover" whileTap="tap">
               {loading ? <span className="flex items-center justify-center gap-2"><motion.div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} /> جارٍ الإضافة...</span> : 'إضافة منتج'}
@@ -287,11 +268,10 @@ const VendorDashboard = () => {
             </motion.button>
           </div>
         </motion.div>
-
         {/* === قائمة المنتجات === */}
         {loading ? (
           <div className="flex justify-center py-20">
-            <motion.div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} />
+            <motion.div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} />
           </div>
         ) : products.length === 0 ? (
           <motion.p className="col-span-full text-center text-slate-400 text-xl py-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -314,48 +294,45 @@ const VendorDashboard = () => {
                 >
                   <div className="p-4">
                     {product.images?.[0] ? (
-                      <img 
-                        src={`${process.env.REACT_APP_API_URL}/Uploads/${product.images[0]}`} 
-                        alt={product.name} 
-                        className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-90 transition" 
-                        onClick={() => openMedia(product.images[0], 'image')} 
-                        onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`; }} 
+                      <img
+                        src={`${process.env.REACT_APP_API_URL}/Uploads/${product.images[0]}`}
+                        alt={product.name}
+                        className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-90 transition"
+                        onClick={() => openMedia(product.images[0], 'image')}
+                        onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`; }}
                       />
                     ) : (
                       <img src={`${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`} alt="بديل" className="w-full h-48 object-cover rounded-xl" />
                     )}
                   </div>
-
                   <div className="p-5 space-y-2 text-right border-t border-gray-700">
-                    <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">{product.name}</h3>
+                    <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">{product.name}</h3>
                     <p className="text-sm text-gray-300">الحالة: <span className={product.approved ? 'text-green-400' : 'text-yellow-400'}>{product.approved ? 'موافق' : 'في الانتظار'}</span></p>
                     <p className="text-sm text-gray-300">سعر الكرتونة: {product.price} جنيه</p>
                     <p className="text-sm text-gray-300">سعر الجوز: {(product.price / product.quantityPerCarton).toFixed(2)} جنيه</p>
                     <p className="text-sm text-gray-300">الكمية: {product.quantityPerCarton} جوز</p>
                     <p className="text-sm text-gray-300">المصنع: {product.manufacturer}</p>
                     <p className="text-sm text-gray-300 line-clamp-2">الوصف: {product.description || 'لا يوجد'}</p>
-
                     <div className="flex flex-wrap gap-2 mt-3 justify-end">
                       {product.images?.map((img, i) => (
-                        <img 
-                          key={i} 
-                          src={`${process.env.REACT_APP_API_URL}/Uploads/${img}`} 
-                          alt="" 
-                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-purple-500 transition" 
-                          onClick={() => openMedia(img, 'image')} 
-                          onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`; }} 
+                        <img
+                          key={i}
+                          src={`${process.env.REACT_APP_API_URL}/Uploads/${img}`}
+                          alt=""
+                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-red-500 transition"
+                          onClick={() => openMedia(img, 'image')}
+                          onError={e => { e.target.onerror = null; e.target.src = `${process.env.REACT_APP_API_URL}/Uploads/placeholder-image.jpg`; }}
                         />
                       ))}
                       {product.videos?.map((vid, i) => (
-                        <video 
-                          key={i} 
-                          src={`${process.env.REACT_APP_API_URL}/Uploads/${vid}`} 
-                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-purple-500 transition" 
-                          onClick={() => openMedia(vid, 'video')} 
+                        <video
+                          key={i}
+                          src={`${process.env.REACT_APP_API_URL}/Uploads/${vid}`}
+                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-red-500 transition"
+                          onClick={() => openMedia(vid, 'video')}
                         />
                       ))}
                     </div>
-
                     <div className="flex gap-2 mt-4">
                       <motion.button
                         onClick={() => setEditingProduct(product)}
@@ -383,7 +360,6 @@ const VendorDashboard = () => {
           </div>
         )}
       </div>
-
       {/* === مودال الوسائط === */}
       <AnimatePresence>
         {selectedMedia && (
@@ -394,12 +370,11 @@ const VendorDashboard = () => {
               ) : (
                 <video src={selectedMedia.url} controls autoPlay className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               )}
-              <button onClick={closeMedia} className="absolute top-4 right-4 bg-purple-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-lg hover:bg-purple-700 transition">×</button>
+              <button onClick={closeMedia} className="absolute top-4 right-4 bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-lg hover:bg-red-700 transition">X</button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* === مودال التحديث === */}
       <AnimatePresence>
         {editingProduct && (
@@ -411,7 +386,7 @@ const VendorDashboard = () => {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 50 }}
             >
-              <h2 className="text-2xl font-bold text-purple-400 mb-6 text-center">تحديث المنتج</h2>
+              <h2 className="text-2xl font-bold text-red-400 mb-6 text-center">تحديث المنتج</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { key: 'name', placeholder: 'اسم المنتج' },
@@ -426,13 +401,13 @@ const VendorDashboard = () => {
                     placeholder={field.placeholder}
                     value={editingProduct[field.key] || ''}
                     onChange={e => setEditingProduct({ ...editingProduct, [field.key]: e.target.value })}
-                    className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 transition"
+                    className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30 transition"
                   />
                 ))}
                 <select
                   value={editingProduct.type || ''}
                   onChange={e => setEditingProduct({ ...editingProduct, type: e.target.value })}
-                  className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 transition"
+                  className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30 transition"
                 >
                   <option value="" disabled>اختر النوع</option>
                   <option value="رجالي">رجالي</option>
@@ -468,5 +443,4 @@ const VendorDashboard = () => {
     </div>
   );
 };
-
 export default VendorDashboard;

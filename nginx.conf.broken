@@ -34,7 +34,7 @@ server {
     ssl_session_tickets off;
 
     # ==== إزالة كل قيود الرفع نهائيًا ====
-    client_max_body_size 0;
+    client_max_body_size 100M;
     client_body_timeout 48h;
     send_timeout 48h;
     proxy_read_timeout 48h;

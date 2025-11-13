@@ -3,14 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-
 // === أيقونة نجاح مخصصة ===
 const CustomCheckIcon = () => (
   <svg className="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
   </svg>
 );
-
 const CreateCustomer = () => {
   const [form, setForm] = useState({ name: '', phone: '', password: '' });
   const [loading, setLoading] = useState(false);
@@ -23,7 +21,6 @@ const CreateCustomer = () => {
   const [blocking, setBlocking] = useState(null);
   const [blockReason, setBlockReason] = useState('');
   const navigate = useNavigate();
-
   // === التحقق من صلاحية الأدمن ===
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -35,7 +32,6 @@ const CreateCustomer = () => {
     }
     fetchCustomers();
   }, [navigate]);
-
   // === جلب العملاء ===
   const fetchCustomers = async () => {
     try {
@@ -50,7 +46,6 @@ const CreateCustomer = () => {
       setFetching(false);
     }
   };
-
   // === إنشاء عميل جديد ===
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,7 +73,6 @@ const CreateCustomer = () => {
       setLoading(false);
     }
   };
-
   // === بدء التعديل ===
   const startEditing = (customer) => {
     setEditing({
@@ -89,7 +83,6 @@ const CreateCustomer = () => {
       password: ''
     });
   };
-
   // === حفظ التعديل ===
   const handleUpdate = async () => {
     if (!editing) return;
@@ -119,7 +112,6 @@ const CreateCustomer = () => {
       showToast(err.response?.data?.message || 'فشل التحديث', 'error');
     }
   };
-
   // === حذف عميل ===
   const handleDelete = async (id) => {
     if (!window.confirm('هل أنت متأكد من حذف هذا العميل؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
@@ -141,7 +133,6 @@ const CreateCustomer = () => {
       showToast(err.response?.data?.message || 'فشل حذف العميل', 'error');
     }
   };
-
   // === حظر عميل ===
   const handleBlock = async (id) => {
     if (!blockReason.trim()) {
@@ -164,7 +155,6 @@ const CreateCustomer = () => {
       showToast(err.response?.data?.message || 'فشل الحظر', 'error');
     }
   };
-
   // === إلغاء الحظر ===
   const handleUnblock = async (id) => {
     const customer = customers.find(c => c._id === id);
@@ -181,18 +171,15 @@ const CreateCustomer = () => {
       showToast(err.response?.data?.message || 'فشل إلغاء الحظر', 'error');
     }
   };
-
   // === تصفية العملاء ===
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
   );
-
   // === Toast ===
   const showToast = (message, type) => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
   };
-
   // === الأنيميشن ===
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -201,15 +188,13 @@ const CreateCustomer = () => {
   };
   const buttonVariants = { hover: { scale: 1.05 }, tap: { scale: 0.95 } };
   const toastVariants = { hidden: { opacity: 0, x: 50 }, visible: { opacity: 1, x: 0 }, exit: { opacity: 0, x: 50 } };
-
   return (
     <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
-      {/* خلفية موف ناعمة */}
+      {/* خلفية أحمر ناعمة */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-900 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800 rounded-full blur-3xl animate-pulse delay-700" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
-
       <div className="relative z-10 max-w-6xl mx-auto">
         {/* === العنوان === */}
         <motion.div
@@ -218,12 +203,11 @@ const CreateCustomer = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
-          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">
             إدارة العملاء
           </h1>
-          <p className="text-purple-300 mt-2 text-lg">إنشاء · تعديل · حظر · حذف</p>
+          <p className="text-red-300 mt-2 text-lg">إنشاء · تعديل · حظر · حذف</p>
         </motion.div>
-
         {/* === Toast === */}
         <AnimatePresence>
           {toast.show && (
@@ -240,21 +224,20 @@ const CreateCustomer = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* === نموذج إنشاء عميل === */}
         <motion.div
           className="bg-[#242526]/80 backdrop-blur-xl p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-700/50 mb-10"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <h2 className="text-xl font-bold text-purple-400 mb-6 text-center">إنشاء عميل جديد</h2>
+          <h2 className="text-xl font-bold text-red-400 mb-6 text-center">إنشاء عميل جديد</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
               type="text"
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
               placeholder="الاسم"
-              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30"
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
               required
               disabled={loading}
             />
@@ -263,7 +246,7 @@ const CreateCustomer = () => {
               value={form.phone}
               onChange={e => setForm({ ...form, phone: e.target.value })}
               placeholder="رقم الهاتف (11 رقم)"
-              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30"
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
               required
               disabled={loading}
             />
@@ -272,7 +255,7 @@ const CreateCustomer = () => {
               value={form.password}
               onChange={e => setForm({ ...form, password: e.target.value })}
               placeholder="كلمة المرور"
-              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30"
+              className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
               required
               disabled={loading}
             />
@@ -299,7 +282,6 @@ const CreateCustomer = () => {
             </motion.button>
           </form>
         </motion.div>
-
         {/* === البحث === */}
         <motion.div
           className="mb-8"
@@ -311,15 +293,14 @@ const CreateCustomer = () => {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="ابحث بالاسم أو رقم الهاتف..."
-            className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30"
+            className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
           />
         </motion.div>
-
         {/* === قائمة العملاء === */}
         {fetching ? (
           <div className="flex justify-center py-20">
             <motion.div
-              className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full"
+              className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full"
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             />
@@ -429,7 +410,7 @@ const CreateCustomer = () => {
                         ) : (
                           <motion.button
                             onClick={() => setBlocking(customer._id)}
-                            className="py-2 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl text-xs font-medium"
+                            className="py-2 bg-gradient-to-r from-red-600 to-red-700 rounded-xl text-xs font-medium"
                             variants={buttonVariants}
                             whileHover="hover"
                             whileTap="tap"
@@ -454,7 +435,6 @@ const CreateCustomer = () => {
             </AnimatePresence>
           </div>
         )}
-
         {/* === نافذة سبب الحظر === */}
         <AnimatePresence>
           {blocking && (
@@ -472,17 +452,17 @@ const CreateCustomer = () => {
                 exit={{ scale: 0.8 }}
                 onClick={e => e.stopPropagation()}
               >
-                <h3 className="text-xl font-bold text-purple-400 mb-4 text-center">سبب الحظر</h3>
+                <h3 className="text-xl font-bold text-red-400 mb-4 text-center">سبب الحظر</h3>
                 <textarea
                   value={blockReason}
                   onChange={e => setBlockReason(e.target.value)}
                   placeholder="اكتب سبب الحظر..."
-                  className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 h-28 resize-none focus:outline-none focus:border-purple-500"
+                  className="w-full p-4 bg-[#3a3b3c]/60 border border-gray-600 rounded-xl text-right placeholder-gray-400 h-28 resize-none focus:outline-none focus:border-red-500"
                 />
                 <div className="flex gap-3 mt-5">
                   <motion.button
                     onClick={() => handleBlock(blocking)}
-                    className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl font-bold"
+                    className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 rounded-xl font-bold"
                     variants={buttonVariants}
                     whileHover="hover"
                     whileTap="tap"
@@ -503,7 +483,6 @@ const CreateCustomer = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* === أنيميشن النجاح === */}
         <AnimatePresence>
           {showSuccessAnimation && (
@@ -529,5 +508,4 @@ const CreateCustomer = () => {
     </div>
   );
 };
-
 export default CreateCustomer;

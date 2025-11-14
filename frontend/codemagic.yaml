@@ -1,0 +1,68 @@
+# codemagic.yaml
+workflows:
+  ios-capacitor:
+    name: Build iOS App (Capacitor)
+    instance_type: mac_mini_m1
+    max_build_duration: 120
+    environment:
+      node: latest
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install Frontend Dependencies
+        script: |
+          cd frontend
+          npm ci --prefer-offline --no-audit
+
+      - name: Build React App
+        script: |
+          cd frontend
+          npm run build
+
+      - name: Capacitor Sync iOS
+        script: |
+          cd frontend
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios
+          pod install --repo-update
+
+      - name: Build & Archive iOS
+        script: |
+          cd frontend/ios/App
+          xcodebuild -workspace App.xcworkspace \
+                     -scheme App \
+                     -configuration Release \
+                     -allowProvisioningUpdates \
+                     -archivePath ../../build/App.xcarchive \
+                     archive
+
+      - name: Export IPA
+        script: |
+          cd frontend/ios/App
+          xcodebuild -exportArchive \
+                     -archivePath ../../build/App.xcarchive \
+                     -exportOptionsPlist ExportOptions.plist \
+                     -exportPath ../../build/ipa \
+                     -allowProvisioningUpdates
+
+    artifacts:
+      - frontend/build/ipa/*.ipa
+      - frontend/build/App.xcarchive/*.dSYM
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com   # غيّر الإيميل
+        notify:
+          success: true
+          failure: true

@@ -1,7 +1,7 @@
 // frontend/src/pages/VendorProducts.js
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
@@ -76,7 +76,6 @@ const VendorProducts = () => {
         setProducts(sortedProducts);
         setFilteredProducts(sortedProducts);
         setVendorName(sortedProducts[0]?.vendor?.name || 'تاجر غير معروف');
-
         const initialIndexes = {};
         const initialTypes = {};
         sortedProducts.forEach(p => {
@@ -290,7 +289,7 @@ const VendorProducts = () => {
       socketRef.current.emit('leaveOrder', orderId);
       currentOrderIdRef.current = null;
     };
-  }, [isChatManuallyOpened, selectedOrderForMessages, scrollToBottom]);
+  }, [isChatManuallyOpened, selectedOrderForMessages, scrollToBottom]); // تم التصحيح هنا
 
   // === Send Message ===
   const handleSendMessage = async (e) => {
@@ -342,6 +341,7 @@ const VendorProducts = () => {
     setIsChatManuallyOpened(true);
     isFirstOpenRef.current = true;
   };
+
   const closeMessages = () => {
     setSelectedOrderForMessages(null);
     setNewMessage('');
@@ -496,7 +496,6 @@ const VendorProducts = () => {
   // === Media Viewer ===
   const openMedia = (media, type) => setSelectedMedia({ url: `${process.env.REACT_APP_API_URL}/Uploads/${media}`, type });
   const closeMedia = () => setSelectedMedia(null);
-
   const handlePrevMedia = (id, p) => {
     const total = (p.videos?.length || 0) + (p.images?.length || 0);
     setCurrentMediaIndex(prev => {
@@ -506,7 +505,6 @@ const VendorProducts = () => {
     });
     clearInterval(intervalRefs.current[id]);
   };
-
   const handleNextMedia = (id, p) => {
     const total = (p.videos?.length || 0) + (p.images?.length || 0);
     setCurrentMediaIndex(prev => {
@@ -516,7 +514,6 @@ const VendorProducts = () => {
     });
     clearInterval(intervalRefs.current[id]);
   };
-
   const selectMediaIndex = (productId, index) => {
     setCurrentMediaIndex(prev => ({ ...prev, [productId]: index }));
     setCurrentMediaType(prev => ({
@@ -525,7 +522,6 @@ const VendorProducts = () => {
     }));
     clearInterval(intervalRefs.current[productId]);
   };
-
   const getCurrentMedia = (product) => {
     const videos = product.videos || [];
     const images = product.images || [];
@@ -554,50 +550,49 @@ const VendorProducts = () => {
     if (orderWithUnread) openMessages(orderWithUnread);
   };
 
+  // === عدد عناصر السلة ===
+  const cartItemsCount = cart.reduce((a, i) => a + i.quantity, 0);
+
   return (
-    <div className="min-h-screen bg-[#18191a] text-white p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#18191a] text-white relative overflow-x-hidden">
       {/* خلفية */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute top-0 left-0 w-96 h-96 bg-red-900 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-800 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
-
-      <div className="relative z-10 w-full max-w-7xl mx-auto">
-        {/* العنوان */}
-        <motion.div className="flex flex-col items-center mb-8" initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600 mt-3">
-            منتجات التاجر: {vendorName}
-          </h1>
-          <p className="text-red-300 text-lg mt-1">المنتجات المتاحة</p>
-        </motion.div>
-
-        {/* الفلتر + السلة */}
+      {/* المحتوى الرئيسي */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto p-4 pb-32">
+        {/* الفلتر + البحث */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-          <motion.select value={filterType} onChange={e => setFilterType(e.target.value)} className="p-3 rounded-xl bg-slate-800/60 backdrop-blur-md border border-slate-600 text-white focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30" whileHover={{ scale: 1.03 }}>
+          <motion.select
+            value={filterType}
+            onChange={e => setFilterType(e.target.value)}
+            className="p-3 rounded-xl bg-slate-800/60 backdrop-blur-md border border-slate-600 text-white focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
+            whileHover={{ scale: 1.03 }}
+          >
             <option value="">الكل</option>
             <option value="رجالي">رجالي</option>
             <option value="حريمي">حريمي</option>
             <option value="أطفال">أطفال</option>
           </motion.select>
           <div className="flex items-center gap-2">
-            <input type="number" placeholder="من (جوز)" value={priceRange.min} onChange={e => setPriceRange(prev => ({ ...prev, min: e.target.value }))} className="p-3 w-24 rounded-xl bg-slate-800/60 border border-slate-600 text-white placeholder:text-slate-400 focus:outline-none focus:border-red-500" />
+            <input
+              type="number"
+              placeholder="من (جوز)"
+              value={priceRange.min}
+              onChange={e => setPriceRange(prev => ({ ...prev, min: e.target.value }))}
+              className="p-3 w-24 rounded-xl bg-slate-800/60 border border-slate-600 text-white placeholder:text-slate-400 focus:outline-none focus:border-red-500"
+            />
             <span className="text-slate-400">إلى</span>
-            <input type="number" placeholder="إلى (جوز)" value={priceRange.max} onChange={e => setPriceRange(prev => ({ ...prev, max: e.target.value }))} className="p-3 w-24 rounded-xl bg-slate-800/60 border border-slate-600 text-white placeholder:text-slate-400 focus:outline-none focus:border-red-500" />
+            <input
+              type="number"
+              placeholder="إلى (جوز)"
+              value={priceRange.max}
+              onChange={e => setPriceRange(prev => ({ ...prev, max: e.target.value }))}
+              className="p-3 w-24 rounded-xl bg-slate-800/60 border border-slate-600 text-white placeholder:text-slate-400 focus:outline-none focus:border-red-500"
+            />
           </div>
-          {userRole === 'customer' && (
-            <motion.button onClick={() => setShowCartModal(true)} className="relative px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-700 shadow-lg hover:from-red-700 hover:to-red-800 flex items-center gap-2" variants={buttonVariants} whileHover="hover" whileTap="tap">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              {cart.reduce((a, i) => a + i.quantity, 0) > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                  {cart.reduce((a, i) => a + i.quantity, 0)}
-                </span>
-              )}
-            </motion.button>
-          )}
         </div>
-
         {/* المنتجات */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.length === 0 ? (
@@ -609,7 +604,6 @@ const VendorProducts = () => {
               const allMedia = [...videos, ...images];
               const currentIdx = currentMediaIndex[product._id] || 0;
               const current = getCurrentMedia(product);
-
               return (
                 <motion.div
                   key={product._id}
@@ -636,8 +630,6 @@ const VendorProducts = () => {
                         className="w-full h-full object-contain"
                       />
                     )}
-
-                    {/* أزرار التنقل */}
                     {allMedia.length > 1 && (
                       <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex gap-3">
                         <button onClick={(e) => { e.stopPropagation(); handlePrevMedia(product._id, product); }} className="bg-black/50 text-white p-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition">
@@ -649,17 +641,15 @@ const VendorProducts = () => {
                       </div>
                     )}
                   </div>
-
-                  {/* صور مصغرة تحت الصورة */}
+                  {/* صور مصغرة */}
                   {allMedia.length > 1 && (
                     <div className="p-3 bg-slate-800/50">
                       <div className="flex justify-center gap-2 flex-wrap">
                         {allMedia.map((media, idx) => {
                           const isVideo = idx < videos.length;
-                          const thumbnailUrl = isVideo 
+                          const thumbnailUrl = isVideo
                             ? (images[0] ? `${process.env.REACT_APP_API_URL}/Uploads/${images[0]}` : null)
                             : `${process.env.REACT_APP_API_URL}/Uploads/${media}`;
-
                           return (
                             <button
                               key={idx}
@@ -668,8 +658,8 @@ const VendorProducts = () => {
                                 selectMediaIndex(product._id, idx);
                               }}
                               className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                                currentIdx === idx 
-                                  ? 'border-red-500 shadow-lg shadow-red-500/50 scale-110' 
+                                currentIdx === idx
+                                  ? 'border-red-500 shadow-lg shadow-red-500/50 scale-110'
                                   : 'border-slate-600 opacity-75 hover:opacity-100'
                               }`}
                             >
@@ -695,7 +685,6 @@ const VendorProducts = () => {
                       </div>
                     </div>
                   )}
-
                   {/* تفاصيل المنتج */}
                   <div className="p-5 space-y-2 text-right">
                     <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">{product.name}</h2>
@@ -707,7 +696,13 @@ const VendorProducts = () => {
                       <p>المصنع: {product.manufacturer}</p>
                     </div>
                     {userRole === 'customer' && (
-                      <motion.button onClick={() => addToCart(product)} className="w-full mt-4 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-lg" variants={buttonVariants} whileHover="hover" whileTap="tap">
+                      <motion.button
+                        onClick={() => addToCart(product)}
+                        className="w-full mt-4 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-lg"
+                        variants={buttonVariants}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
                         إضافة إلى السلة
                       </motion.button>
                     )}
@@ -718,26 +713,53 @@ const VendorProducts = () => {
           )}
         </div>
       </div>
-
+      {/* === أيقونة السلة العائمة (بدون نص) === */}
+      {userRole === 'customer' && (
+        <motion.div
+          className="fixed bottom-6 left-6 z-50"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 300 }}
+        >
+          <button
+            onClick={() => setShowCartModal(true)}
+            className="relative w-16 h-16 bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-full shadow-2xl flex items-center justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            {cartItemsCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center animate-pulse">
+                {cartItemsCount > 99 ? '99+' : cartItemsCount}
+              </span>
+            )}
+          </button>
+        </motion.div>
+      )}
       {/* Toast */}
       <AnimatePresence>
         {showAddedToCart && (
-          <motion.div className="fixed top-6 right-6 bg-red-600 text-white px-5 py-3 rounded-full shadow-xl flex items-center gap-2 z-50" variants={toastVariants} initial="hidden" animate="visible" exit="hidden">
+          <motion.div
+            className="fixed top-6 right-6 bg-red-600 text-white px-5 py-3 rounded-full shadow-xl flex items-center gap-2 z-50"
+            variants={toastVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+          >
             <span>تمت الإضافة</span>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* باقي المودالات (سلة، طلب، ميديا، شات، floating button) */}
-      {/* نفس الكود الموجود في Home.js بالضبط */}
-
+      {/* === باقي المودالات === */}
       {/* Cart Modal */}
       <AnimatePresence>
         {showCartModal && userRole === 'customer' && (
-          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={() => setShowCartModal(false)}>
+          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={() => setShowCartModal(false)}>
             <motion.div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-slate-700 w-full max-w-lg" onClick={e => e.stopPropagation()}>
               <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600 mb-6 text-right">السلة</h2>
-              {cart.length === 0 ? <p className="text-center text-slate-400">السلة فارغة</p> : (
+              {cart.length === 0 ? (
+                <p className="text-center text-slate-400">السلة فارغة</p>
+              ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {cart.map(item => (
                     <div key={`${item.product._id}-${item.selectedImage}`} className="flex items-center justify-between gap-4 p-3 bg-slate-800/50 rounded-xl">
@@ -764,11 +786,10 @@ const VendorProducts = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Order Modal */}
       <AnimatePresence>
         {showOrderForm && userRole === 'customer' && (
-          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={() => setShowOrderForm(false)}>
+          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={() => setShowOrderForm(false)}>
             <motion.div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-slate-700 w-full max-w-md" onClick={e => e.stopPropagation()}>
               <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600 mb-6 text-right">إدخال العنوان</h2>
               <input type="text" placeholder="العنوان" value={orderForm.address} onChange={e => setOrderForm({ address: e.target.value })} className="w-full p-4 mb-6 bg-slate-800/60 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/30" />
@@ -782,12 +803,11 @@ const VendorProducts = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Media Modal */}
       <AnimatePresence>
         {selectedMedia && (
-          <motion.div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={closeMedia}>
-            <motion.div className="relative max-w-4xl max-h-screen p-4" onClick={e => e.stopPropagation()}>
+          <motion.div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="hidden" onClick={closeMedia}>
+            <motion.div className="relative max-w-4xl max-h-screen" onClick={e => e.stopPropagation()}>
               {selectedMedia.type === 'image' ? (
                 <img src={selectedMedia.url} alt="" className="max-w-full max-h-screen rounded-2xl shadow-2xl" />
               ) : (
@@ -798,11 +818,10 @@ const VendorProducts = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Messages Modal */}
       <AnimatePresence>
         {selectedOrderForMessages && isChatManuallyOpened && !selectedOrderForMessages.isGrouped && (
-          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="exit">
+          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" variants={modalVariants} initial="hidden" animate="visible" exit="hidden">
             <motion.div className="bg-[#242526] p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <h2 className="text-3xl font-bold mb-6 text-right bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-red-600">
                 الرسائل للطلب #{selectedOrderForMessages.orderNumber}
@@ -854,7 +873,6 @@ const VendorProducts = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Floating Chat Button */}
       {(userRole === 'customer' || userRole === 'vendor') && totalUnread > 0 && showFloatingChatButton && (
         <motion.div className="fixed bottom-6 right-6 z-50" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300 }}>
